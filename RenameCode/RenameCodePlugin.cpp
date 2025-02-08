@@ -96,7 +96,7 @@ static bool runCodeRename(Function &F, std::string &CryptoKey) {
   // Rename the function with the encrypted name.
   F.setName("_" + encryptedName);
 
-  LLVM_DEBBUG(llvm::outs() << *F.getParent() << '\n');
+  LLVM_DEBUG(llvm::outs() << *F.getParent() << '\n');
 
   return true;
 }
