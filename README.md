@@ -1,6 +1,5 @@
 # kovid-obfustaion-passes
-A set of LLVM based plugins that perform code obfustaion.
-
+kovid-obfustaion-passes is a collection of LLVM-based plugins designed to perform code obfuscation through various transformation techniques. The repository showcases how LLVM passes can be utilized to obscure code, making it more challenging for reverse engineering and tampering. Our aim is to provide open source obfuscation passes that empower security researchers and developers to better understand these techniques and prepare defenses against potential malicious attacks. As part of the broader OpenSecurity projects, this initiative promotes transparency and collaboration in the security community, enabling researchers to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
 
 ## Install deps
 
