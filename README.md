@@ -68,3 +68,7 @@ clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/KoviDRenameCodePlugin.so -c
 ```
 
 NOTE: Make sure you use the same LLVM version as the one used for plugin build.
+
+# Implemented plugins
+
+1. Code renaming
