@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.13.4)
 
 project("kovid-obfustaion-passes")
 
+# Specify the C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include(AddLLVM)

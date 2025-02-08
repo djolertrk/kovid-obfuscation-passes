@@ -23,5 +23,49 @@ ninja
 ## Run
 
 ```
-clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/KoviDRenameCodePlugin.so
+$ cat test.c
+#include <stdlib.h>
+#include <stdio.h>
+
+int f2();
+
+__attribute__((noinline))
+static void bar() {
+	f2();
+}
+
+__attribute__((noinline))
+static void foo() {
+	bar();
+}
+
+__attribute__((noinline))
+static void f() {
+  
+  foo();
+}
+
+__attribute__((noinline))
+static void g() {
+	f();
+}
+
+__attribute__((noinline))
+int k() {
+	g();
+	int a;
+	scanf("%d", &a);
+	return a;
+}
+
+int main() {
+	int l = k();
+	return l;
+}
 ```
+
+```
+clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/KoviDRenameCodePlugin.so -c
+```
+
+NOTE: Make sure you use the same LLVM version as the one used for plugin build.
