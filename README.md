@@ -72,3 +72,10 @@ NOTE: Make sure you use the same LLVM version as the one used for plugin build.
 # Implemented plugins
 
 1. Code renaming
+
+# Deobfuscation Tools
+
+1. kovid-deobfuscator
+
+<img width="611" alt="Screenshot 2025-02-09 at 16 31 35" src="https://github.com/user-attachments/assets/04ddc5e3-838f-4549-b3d2-ca5cf748d98d" />
+
