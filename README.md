@@ -17,7 +17,7 @@ sudo apt-get install -y ninja-build
 ```
 mkdir build_plugin && cd build_plugin
 cmake ../kovid-obfustaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -GNinja
-ninja
+ninja && sudo ninja install
 ```
 
 ## Run

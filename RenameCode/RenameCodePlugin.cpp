@@ -15,6 +15,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -56,27 +57,27 @@ static std::string encryptFunctionName(const std::string &name,
 
 static bool runCodeRename(Function &F, std::string &CryptoKey) {
   if (F.isDeclaration()) {
-    llvm::dbgs() << "Skipping function declaration.\n";
+    llvm::WithColor::note() << "Skipping function declaration.\n";
     return false;
   }
 
   if (!F.hasLocalLinkage()) {
-    llvm::dbgs() << "Skipping function with non local linkage.\n";
+    llvm::WithColor::note() << "Skipping function with non local linkage.\n";
     return false;
   }
 
   // Get the original function name.
   std::string originalName = F.getName().str();
-  llvm::dbgs() << "Original function name: " << originalName << "\n";
+  llvm::WithColor::note() << "Original function name: " << originalName << "\n";
 
   // Encrypt the function name using the provided CryptoKey.
   std::string encryptedName = encryptFunctionName(originalName, CryptoKey);
-  llvm::dbgs() << "Encrypted function name: " << encryptedName << "\n";
+  llvm::WithColor::note() << "Encrypted function name: " << encryptedName << "\n";
 
   // Rename the function with the encrypted name.
   F.setName("_" + encryptedName);
 
-  LLVM_DEBUG(llvm::outs() << *F.getParent() << '\n');
+  LLVM_DEBUG(llvm::WithColor::note() << *F.getParent() << '\n');
 
   return true;
 }
@@ -88,11 +89,11 @@ struct RenameCode : PassInfoMixin<RenameCode> {
   RenameCode(std::string Key = CRYPTO_KEY) : CryptoKey(Key) {}
 
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
-    llvm::dbgs() << "Running KoviD Rename Code Pass: " << F.getName() << '\n';
-    llvm::dbgs() << "Using crypto key: " << CryptoKey << "\n";
+    llvm::WithColor::note() << "Running KoviD Rename Code Pass: " << F.getName() << '\n';
+    llvm::WithColor::note() << "Using crypto key: " << CryptoKey << "\n";
 
     runCodeRename(F, CryptoKey);
-    llvm::dbgs() << '\n';
+    llvm::WithColor::note() << '\n';
 
     return PreservedAnalyses::all();
   }
