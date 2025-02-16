@@ -12,7 +12,7 @@ CXXFLAGS += -I/usr/lib/gcc/x86_64-linux-gnu/12/plugin/include/
 all: libKoviDRenameCodeGCCPlugin.so
 
 libKoviDRenameCodeGCCPlugin.so: RenameCodePlugin.cpp
-	$(CXX) $(CXXFLAGS) -fPIC -shared -o $@ $<
+	$(CXX) $(CXXFLAGS) -DCRYPTO_KEY="\"$(CRYPTO_KEY)\"" -fPIC -shared -o $@ $<
 
 clean:
 	rm -f libKoviDRenameCodeGCCPlugin.so

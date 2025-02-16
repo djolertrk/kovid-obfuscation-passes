@@ -1,9 +1,9 @@
   execute_process(
     COMMAND sh -c "od -vAn -N8 -tx8 /dev/urandom | tr -d ' \n'"
-    OUTPUT_VARIABLE CRYPTO_KEY
+    OUTPUT_VARIABLE LLVM_CRYPTO_KEY
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-message(STATUS "Using build-time crypto key: ${CRYPTO_KEY}")
+message(STATUS "Using build-time crypto key for LLVM Plugin: ${LLVM_CRYPTO_KEY}")
 
 add_llvm_pass_plugin(libKoviDRenameCodeLLVMPlugin
   RenameCodePlugin.cpp
@@ -13,7 +13,7 @@ add_llvm_pass_plugin(libKoviDRenameCodeLLVMPlugin
     intrinsics_gen
   )
 
-target_compile_definitions(libKoviDRenameCodeLLVMPlugin PRIVATE CRYPTO_KEY="${CRYPTO_KEY}")
+target_compile_definitions(libKoviDRenameCodeLLVMPlugin PRIVATE CRYPTO_KEY="${LLVM_CRYPTO_KEY}")
 
 set_target_properties(libKoviDRenameCodeLLVMPlugin PROPERTIES EXCLUDE_FROM_ALL OFF)
 set_target_properties(libKoviDRenameCodeLLVMPlugin
