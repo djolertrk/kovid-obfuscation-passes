@@ -6,12 +6,16 @@ kovid-obfustaion-passes is a collection of LLVM-based plugins designed to perfor
 ## Install deps
 
 ```
+# LLVM
 echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
 wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
 sudo apt-get update
 sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 pkg-config libgc-dev libssl-dev zlib1g-dev libcjson-dev libunwind-dev
 sudo apt-get install -y python3.12-dev
 sudo apt-get install -y ninja-build
+
+# GCC Plugin Dev Package
+$ sudo apt-get install gcc-12-plugin-dev
 ```
 
 ## Build
@@ -20,6 +24,13 @@ sudo apt-get install -y ninja-build
 mkdir build_plugin && cd build_plugin
 cmake ../kovid-obfustaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -GNinja
 ninja && sudo ninja install
+```
+
+It should be available here:
+
+```
+/usr/local/lib/libKoviDRenameCodeGCCPlugin.so
+/usr/local/lib/libKoviDRenameCodeLLVMPlugin.so
 ```
 
 ## Run
@@ -67,10 +78,52 @@ int main() {
 ```
 
 ```
-clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/KoviDRenameCodePlugin.so -c
+clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/libKoviDRenameCodeLLVMPlugin.so -c
 ```
 
 NOTE: Make sure you use the same LLVM version as the one used for plugin build.
+
+Or with GCC:
+
+```
+$ g++-12 test.c -O2 -fplugin=/usr/local/lib/libKoviDRenameCodeGCCPlugin.so test.c -c
+KoviD Rename Code GCC Plugin loaded successfully
+KoviD Rename: Original function name: bar
+KoviD Rename: Using crypto key: default_key
+KoviD Rename: Encrypted name: 060414
+
+KoviD Rename: Original function name: foo
+KoviD Rename: Using crypto key: default_key
+KoviD Rename: Encrypted name: 020a09
+
+KoviD Rename: Original function name: main
+KoviD Rename: Using crypto key: default_key
+KoviD Rename: Encrypted name: 09040f0f
+
+$ objdump -d test.o
+
+test.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_060414>:
+   0:	f3 0f 1e fa          	endbr64 
+   4:	c3                   	ret    
+   5:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+   c:	00 00 00 00 
+
+0000000000000010 <_020a09>:
+  10:	f3 0f 1e fa          	endbr64 
+  14:	c3                   	ret    
+  15:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+  1c:	00 00 00 00 
+
+0000000000000020 <_09040f0f>:
+  20:	f3 0f 1e fa          	endbr64 
+  24:	b8 01 00 00 00       	mov    $0x1,%eax
+  29:	c3                   	ret
+```
 
 # Implemented plugins
 
@@ -85,5 +138,4 @@ NOTE: Make sure you use the same LLVM version as the one used for plugin build.
 # TODO
 
 1. Support Windows
-2. Add GCC Plugins
-3. Support more obfustaion techniques
+2. Support more obfustaion techniques

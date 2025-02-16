@@ -16,3 +16,5 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 
 add_subdirectory(RenameCode)
 add_subdirectory(tools)
+
+install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)
