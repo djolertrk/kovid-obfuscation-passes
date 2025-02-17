@@ -85,8 +85,18 @@ struct kovid_rename_pass : gimple_opt_pass {
     if (!gimple_has_body_p(fndecl))
       return 0;
 
+    // TODO: Handle those.
+    if (TREE_PUBLIC(fndecl))
+      return 0;
+    if (DECL_EXTERNAL(fndecl))
+      return 0;
+
     // Only rename functions with local linkage (typically static functions).
     if (!TREE_STATIC(fndecl))
+      return 0;
+
+    // Skip `inline` functions for now.
+    if (DECL_DECLARED_INLINE_P(fndecl))
       return 0;
 
     // Get the original function name.
