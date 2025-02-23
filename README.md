@@ -128,6 +128,7 @@ Disassembly of section .text:
 # Implemented plugins
 
 1. Code renaming
+2. Dummy Code Insertion
 
 # Deobfuscation Tools
 
