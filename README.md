@@ -3,6 +3,12 @@ kovid-obfustaion-passes is a collection of LLVM and GCC based plugins designed t
 
 <img width="1187" alt="Screenshot 2025-02-15 at 16 52 22" src="https://github.com/user-attachments/assets/24782832-5a84-4e51-af4e-84246fe6e5b2" />
 
+
+## Implemented plugins
+
+1. Code renaming
+2. Dummy Code Insertion
+
 ## Install deps
 
 ```
@@ -124,11 +130,6 @@ Disassembly of section .text:
   24:	b8 01 00 00 00       	mov    $0x1,%eax
   29:	c3                   	ret
 ```
-
-# Implemented plugins
-
-1. Code renaming
-2. Dummy Code Insertion
 
 # Deobfuscation Tools
 
