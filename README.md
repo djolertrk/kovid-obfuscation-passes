@@ -8,6 +8,7 @@ kovid-obfustaion-passes is a collection of LLVM and GCC based plugins designed t
 
 1. Code renaming
 2. Dummy Code Insertion
+3. Metadata and Unused Code Removal
 
 ## Install deps
 
