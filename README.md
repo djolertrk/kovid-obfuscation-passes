@@ -7,11 +7,25 @@ kovid-obfustaion-passes is a collection of LLVM and GCC based plugins designed t
 ## Implemented plugins
 
 1. Code renaming
+
+Renames functions using a reversible encryption technique. This obscures the original symbol names, making it harder for an attacker to understand the program's structure or intent by simply reading symbol tables.
+
 2. Dummy Code Insertion
+
+Inserts non-functional “dummy” instructions into the code. These extraneous operations increase the complexity and size of the binary, thereby distracting both human reverse engineers and automated analysis tools from the real logic.
+
 3. Metadata and Unused Code Removal
+
+Removes debug metadata, unused functions, and other non-essential information. This removal limits the amount of contextual information available to an attacker, reducing insights into program structure, variable types, and execution flow.
+
 4. Instruction Pattern Transformation
   - Arithmetic code obfuscation
+
+Transforms common arithmetic operations into equivalent but more complex sequences. By altering familiar instruction patterns, the pass complicates static analysis and reverse engineering efforts without changing the program’s behavior. We will cover more instructions.
+
 5. String Encryption Obfuscation
+
+Encrypts plaintext string literals in the binary so that sensitive or informative strings are hidden. This prevents attackers from easily gleaning information by simply reading the binary’s embedded strings.
 
 ## Install deps
 
