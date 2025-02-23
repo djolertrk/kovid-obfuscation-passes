@@ -11,6 +11,7 @@ kovid-obfustaion-passes is a collection of LLVM and GCC based plugins designed t
 3. Metadata and Unused Code Removal
 4. Instruction Pattern Transformation
   - Arithmetic code obfuscation
+5. String Encryption Obfuscation
 
 ## Install deps
 
@@ -43,6 +44,10 @@ It should be available here:
 ```
 
 ## Run
+
+Here are some examples.
+
+### Code renaming Plugin
 
 ```
 $ cat test.c
@@ -133,6 +138,30 @@ Disassembly of section .text:
   24:	b8 01 00 00 00       	mov    $0x1,%eax
   29:	c3                   	ret
 ```
+
+### String Encryption Obfuscation Plugin
+
+NOTE: Module Passes such as `libKoviDStringEncryptionLLVMPlugin.so` and `libKoviDRemoveMetadataAndUnusedCodeLLVMPlugin.so` use this way for now.
+
+We can go to LLVM IR and then use `opt` tool as:
+
+```
+$ clang-19 -O2 -emit-llvm -c test.c -o test.bc
+$ opt-19 -load-pass-plugin=libKoviDStringEncryptionLLVMPlugin.so -passes="string-encryption" test.bc -o test_obf.bc
+$ clang-19 -O2 test_obf.bc
+$ ./a.out 
+2 4
+ Z[V
+```
+
+With no obfusctaion it would look as:
+```
+$ clang-19 -O2 test.c
+$ ./a.out 
+2 4
+All good 4
+```
+So, the `All good 4` is tainted with this plugin...
 
 # Deobfuscation Tools
 

@@ -3,7 +3,7 @@
     OUTPUT_VARIABLE LLVM_CRYPTO_KEY
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-message(STATUS "Using build-time crypto key for LLVM Plugin: ${LLVM_CRYPTO_KEY}")
+message(STATUS "Using build-time crypto key for RenameCode LLVM Plugin: ${LLVM_CRYPTO_KEY}")
 
 add_llvm_pass_plugin(libKoviDRenameCodeLLVMPlugin
   RenameCodePlugin.cpp
