@@ -1,5 +1,5 @@
-# kovid-obfustaion-passes
-kovid-obfustaion-passes is a collection of LLVM and GCC based plugins designed to perform code obfuscation through various transformation techniques. The repository showcases how compiler passes can be utilized to obscure code, making it more challenging for reverse engineering and tampering. Our aim is to provide open source obfuscation passes that empower security researchers and developers to better understand these techniques and prepare defenses against potential malicious attacks. As part of the broader OpenSecurity projects, this initiative promotes transparency and collaboration in the security community, enabling researchers to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
+# kovid-obfusctaion-passes
+kovid-obfusctaion-passes is a collection of LLVM and GCC based plugins designed to perform code obfuscation through various transformation techniques. The repository showcases how compiler passes can be utilized to obscure code, making it more challenging for reverse engineering and tampering. Our aim is to provide open source obfuscation passes that empower security researchers and developers to better understand these techniques and prepare defenses against potential malicious attacks. As part of the broader OpenSecurity projects, this initiative promotes transparency and collaboration in the security community, enabling researchers to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
 
 <img width="1187" alt="Screenshot 2025-02-15 at 16 52 22" src="https://github.com/user-attachments/assets/24782832-5a84-4e51-af4e-84246fe6e5b2" />
 
@@ -46,7 +46,7 @@ $ sudo apt-get install gcc-12-plugin-dev
 
 ```
 mkdir build_plugin && cd build_plugin
-cmake ../kovid-obfustaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -GNinja
+cmake ../kovid-obfusctaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -GNinja
 ninja && sudo ninja install
 ```
 
@@ -186,4 +186,4 @@ So, the `All good 4` is tainted with this plugin...
 # TODO
 
 1. Support Windows
-2. Support more obfustaion techniques
+2. Support more obfusctaion techniques
