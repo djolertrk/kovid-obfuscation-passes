@@ -185,7 +185,7 @@ So, the `All good 4` is tainted with this plugin...
 
 ## Debugging obfuscated code
 
-There will be LLDB plugins that will do deobfuscation of the tainted code. For example, the `RenameCode` plugin does not drop debugging information, so when renaming function `bar` into function `5fgafx`, you will still be able to set a breakpoint to `bar`. In general, debugging information should be `strip`ped from binary and used only during debugging sessions (or you can use `Split DWARF`, which is supported by most of modern compilers and debuggers).
+There will be LLDB plugins that will do deobfuscation of the tainted code. But some things won't need any plugin for debugging. For example, the `RenameCode` plugin does not drop debugging information, so when renaming function `bar` into function `5fgafx`, you will still be able to set a breakpoint to `bar`. In general, debugging information should be `strip`ped from binary and used only during debugging sessions (or you can use `Split DWARF`, which is supported by most of modern compilers and debuggers).
 
 But, for example, if you want to debug code that was processed with `libKoviDStringEncryptionLLVMPlugin.so`, you will need to use LLDB plugin for it:
 
