@@ -197,7 +197,16 @@ But, for example, if you want to debug code that was processed with `libKoviDStr
 
 <img width="611" alt="Screenshot 2025-02-09 at 16 31 35" src="https://github.com/user-attachments/assets/04ddc5e3-838f-4549-b3d2-ca5cf748d98d" />
 
-# TODO
+## TODO
 
 1. Support Windows
 2. Support more obfusctaion techniques
+
+
+## Users
+
+Some of the plugins are being used for obfuscated build of an awesome, open-source rootkit - [KoviD](https://github.com/carloslack/KoviD).
+
+## Contact
+
+New ideas? Drop me a message at djolertrk@gmail.com
