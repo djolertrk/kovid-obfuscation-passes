@@ -12,7 +12,7 @@
 // Its purpose is to hide plaintext string literals in the final binary.
 // It does so by scanning all global variables for constant string literals,
 // encrypting their contents using a simple XOR cipher with a provided key,
-// and replacing the initializer with the encrypted data.
+// and replacing them in the IR with encrypted data.
 //
 // In a production environment, a runtime decryption routine must be provided
 // so that the original string values can be recovered when needed. This pass
@@ -36,8 +36,8 @@
 
 using namespace llvm;
 
-#ifndef STRING_CRYPTO_KEY
-#define STRING_STRING_CRYPTO_KEY "default_key"
+#ifndef SE_LLVM_CRYPTO_KEY
+#define SE_LLVM_CRYPTO_KEY "default_key"
 #endif
 
 // A simple XOR-based encryption routine for strings.
@@ -48,16 +48,27 @@ static std::string encryptString(const std::string &str,
   for (size_t i = 0; i < str.size(); ++i) {
     encrypted.push_back(str[i] ^ key[i % key.size()]);
   }
-  return encrypted;
+
+  // Convert the binary result into a hex string.
+  std::ostringstream oss;
+  for (unsigned char c : encrypted) {
+    oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+  }
+
+  return oss.str();
 }
 
 namespace {
 
 struct StringEncryptionPass : public PassInfoMixin<StringEncryptionPass> {
   std::string CryptoKey;
-  StringEncryptionPass(std::string Key = STRING_CRYPTO_KEY) : CryptoKey(Key) {}
+  StringEncryptionPass(std::string Key = SE_LLVM_CRYPTO_KEY) : CryptoKey(Key) {}
 
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
+    // Collect globals to process in a separate container to avoid modifying
+    // the iterator while in the loop.
+    SmallVector<GlobalVariable *> GlobalsToProcess;
+
     for (GlobalVariable &GV : M.globals()) {
       // Process only globals with an initializer.
       if (!GV.hasInitializer())
@@ -67,45 +78,79 @@ struct StringEncryptionPass : public PassInfoMixin<StringEncryptionPass> {
       Type *GVType = GV.getValueType();
       if (auto *AT = dyn_cast<ArrayType>(GVType)) {
         if (AT->getElementType()->isIntegerTy(8)) {
-          if (ConstantDataArray *CDA =
-                  dyn_cast<ConstantDataArray>(GV.getInitializer())) {
+          if (auto *CDA = dyn_cast<ConstantDataArray>(GV.getInitializer())) {
             if (CDA->isString()) {
-              // Get the original string.
-              std::string origStr = CDA->getAsString().str();
-              llvm::WithColor::note() << "Original string in " << GV.getName()
-                                      << ": " << origStr << "\n";
-
-              // Encrypt the string using the provided key.
-              std::string encStr = encryptString(origStr, CryptoKey);
-              llvm::WithColor::note() << "Encrypted string: " << encStr << "\n";
-
-              // Determine the number of elements in the original array.
-              // Typically, a string literal is stored as an array with a null
-              // terminator.
-              unsigned origNumElements = AT->getNumElements();
-              // We assume that if origNumElements equals origStr.size() + 1,
-              // then the original initializer included a null terminator.
-              bool addNull = (origNumElements == origStr.size() + 1);
-
-              // Create a new constant array with the encrypted string.
-              Constant *newInit =
-                  ConstantDataArray::getString(M.getContext(), encStr, addNull);
-
-              // Check if the new initializer's type matches the global's type.
-              if (newInit->getType() != GVType) {
-                // If not, adjust the type via bitcasting.
-                newInit = ConstantExpr::getBitCast(newInit, GVType);
-              }
-
-              GV.setInitializer(newInit);
-              // Optionally, mark the global as non-constant if runtime
-              // decryption is needed.
-              GV.setConstant(false);
+              GlobalsToProcess.push_back(&GV);
             }
           }
         }
       }
     }
+
+    for (GlobalVariable *GV : GlobalsToProcess) {
+      auto *CDA = cast<ConstantDataArray>(GV->getInitializer());
+      std::string origStr = CDA->getAsString().str();
+
+      llvm::WithColor::note()
+          << "Original string in " << GV->getName() << ": " << origStr << "\n";
+
+      // Check if the original array had a null terminator.
+      // For example, a [6 x i8] might store "Hello\0".
+      auto *AT = cast<ArrayType>(GV->getValueType());
+      unsigned origNumElements = AT->getNumElements();
+      // If the array size is exactly origStr.size() + 1,
+      // that implies there's a trailing '\0'.
+      bool hadTerminator = (origNumElements == origStr.size() + 1);
+
+      // If there was a null terminator, explicitly append it
+      // before encrypting. That way, the '\0' itself is also XOR'd.
+      if (hadTerminator) {
+        // Make sure we only append if the last character isn't already '\0'.
+        // getAsString() usually strips trailing null, but just to be safe:
+        if (origStr.empty() || origStr.back() != '\0') {
+          origStr.push_back('\0');
+        }
+      }
+
+      // Encrypt everything (including the terminator if present).
+      std::string encStr = encryptString(origStr, CryptoKey);
+      llvm::WithColor::note() << "Using key: " << CryptoKey << '\n';
+      llvm::WithColor::note() << "Encrypted string: " << encStr << "\n";
+
+      Constant *NewInit = ConstantDataArray::getString(M.getContext(), encStr,
+                                                       /*AddNull=*/true);
+
+      // Now check if the type changed (e.g. length changed).
+      Type *NewArrTy = NewInit->getType(); // something like [N x i8]
+      Type *OldArrTy = GV->getValueType();
+
+      if (NewArrTy != OldArrTy) {
+        // Create a new global with the corrected type.
+        auto *NewGV = new GlobalVariable(M, NewArrTy,
+                                         /*isConstant=*/false, GV->getLinkage(),
+                                         NewInit, GV->getName() + ".encrypted");
+
+        if (GV->getAlignment())
+          NewGV->setAlignment(GV->getAlign());
+        NewGV->setVisibility(GV->getVisibility());
+        NewGV->setDSOLocal(GV->isDSOLocal());
+
+        // Replace uses with a bitcast if pointer types differ.
+        if (NewGV->getType() != GV->getType()) {
+          auto *BC = ConstantExpr::getPointerBitCastOrAddrSpaceCast(
+              NewGV, GV->getType());
+          GV->replaceAllUsesWith(BC);
+        } else {
+          GV->replaceAllUsesWith(NewGV);
+        }
+        GV->eraseFromParent();
+      } else {
+        // If lengths match, just replace the initializer in place.
+        GV->setInitializer(NewInit);
+        GV->setConstant(false);
+      }
+    }
+
     return PreservedAnalyses::none();
   }
 };
@@ -124,7 +169,7 @@ PassPluginLibraryInfo getPassPluginInfo() {
 
   return {LLVM_PLUGIN_API_VERSION, "kovid-string-encryption", "0.0.1",
           callback};
-};
+}
 
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return getPassPluginInfo();

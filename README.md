@@ -34,7 +34,7 @@ Encrypts plaintext string literals in the binary so that sensitive or informativ
 echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
 wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
 sudo apt-get update
-sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 pkg-config libgc-dev libssl-dev zlib1g-dev libcjson-dev libunwind-dev
+sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 pkg-config libgc-dev libssl-dev zlib1g-dev libcjson-dev libunwind-dev liblldb-19-dev
 sudo apt-get install -y python3.12-dev
 sudo apt-get install -y ninja-build
 
@@ -55,6 +55,12 @@ It should be available here:
 ```
 /usr/local/lib/libKoviDRenameCodeGCCPlugin.so
 /usr/local/lib/libKoviDRenameCodeLLVMPlugin.so
+```
+
+If you want to build with LLDB plugins, taht can be used for de-obfuscation on the fly, use `-DKOP_BUILD_LLDB_PLUGINS=1`, so:
+
+```
+cmake ../kovid-obfustaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -DKOP_BUILD_LLDB_PLUGINS=1 -GNinja
 ```
 
 ## Run
@@ -176,6 +182,14 @@ $ ./a.out
 All good 4
 ```
 So, the `All good 4` is tainted with this plugin...
+
+# Debugging obfuscated code
+
+There will be LLDB plugins that will do deobfuscation of the tainted code. For example, the `RenameCode` plugin does not drop debugging information, so when renaming function `bar` into function `5fgafx`, you will still be able to set a breakpoint to `bar`. In general, debugging information should be `strip`ped from binary and used only during debugging sessions (or you can use `Split DWARF`, which is supported by most of modern compilers and debuggers).
+
+But, for example, if you want to debug code that was processed with `libKoviDStringEncryptionLLVMPlugin.so`, you will need to use LLDB plugin for it:
+
+
 
 # Deobfuscation Tools
 

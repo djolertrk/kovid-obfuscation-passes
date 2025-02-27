@@ -14,7 +14,7 @@ add_llvm_pass_plugin(libKoviDStringEncryptionLLVMPlugin
     intrinsics_gen
   )
 
-target_compile_definitions(libKoviDStringEncryptionLLVMPlugin PRIVATE STRING_CRYPTO_KEY="${SE_LLVM_CRYPTO_KEY}")
+target_compile_definitions(libKoviDStringEncryptionLLVMPlugin PRIVATE SE_LLVM_CRYPTO_KEY="${SE_LLVM_CRYPTO_KEY}")
 
 set_target_properties(libKoviDStringEncryptionLLVMPlugin PROPERTIES EXCLUDE_FROM_ALL OFF)
 set_target_properties(libKoviDStringEncryptionLLVMPlugin
@@ -23,3 +23,7 @@ set_target_properties(libKoviDStringEncryptionLLVMPlugin
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+if (KOP_BUILD_LLDB_PLUGINS)
+  add_subdirectory(LLDB)
+endif()
