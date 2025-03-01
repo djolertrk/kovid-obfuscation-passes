@@ -34,3 +34,8 @@ add_custom_command(TARGET build_plugin2 POST_BUILD
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Copying libKoviDStringEncryptionGCCPlugin.so to ${LIBRARY_OUTPUT_DIRECTORY} and cleaning external build"
 )
+
+install(
+  FILES "${LIBRARY_OUTPUT_DIRECTORY}/libKoviDStringEncryptionGCCPlugin.so"
+  DESTINATION lib
+)
