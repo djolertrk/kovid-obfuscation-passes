@@ -48,7 +48,7 @@ using namespace llvm;
 namespace {
 
 // This, for now, implements "Arithmetic code obfuscation" only.
-struct InstructionObfPass : public PassInfoMixin<InstructionObfPass> {
+struct InstructionObfuscationPass : public PassInfoMixin<InstructionObfuscationPass> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
     // Process each basic block in the function.
     for (BasicBlock &BB : F) {
@@ -125,7 +125,7 @@ PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
         [&](ModulePassManager &MPM, auto) {
-          MPM.addPass(createModuleToFunctionPassAdaptor(InstructionObfPass()));
+          MPM.addPass(createModuleToFunctionPassAdaptor(InstructionObfuscationPass()));
           return true;
         });
   };
