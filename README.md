@@ -63,6 +63,14 @@ If you want to build with LLDB plugins, taht can be used for de-obfuscation on t
 cmake ../kovid-obfustaion-passes/ -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -DKOP_BUILD_LLDB_PLUGINS=1 -GNinja
 ```
 
+### MacOS
+
+On MacOS, disable GCC plugins as follows:
+
+```
+$ cmake ../kovid-obfustaion-passes -GNinja -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/opt/homebrew/opt/llvm@19/lib/cmake/llvm -DKOP_BUILD_GCC_PLUGINS=0
+```
+
 ## Run
 
 Here are some examples.

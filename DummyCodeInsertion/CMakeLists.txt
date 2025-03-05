@@ -1,2 +1,4 @@
 add_subdirectory(LLVM)
-add_subdirectory(GCC)
+if (KOP_BUILD_GCC_PLUGINS)
+ add_subdirectory(GCC)
+endif()
