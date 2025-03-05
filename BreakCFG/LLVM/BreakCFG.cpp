@@ -8,7 +8,8 @@
 // This LLVM pass complicates reverse engineering by injecting additional
 // basic blocks and dummy conditional branches. Specifically, it:
 //
-// 1. Identifies candidate basic blocks and splits them to create “noise” blocks.
+// 1. Identifies candidate basic blocks (with exactly one successor) and splits
+//    them to create “noise” blocks.
 // 2. Replaces original terminators with a conditional branch, leading to either
 //    the old successor or the newly inserted block.
 // 3. Uses naive or placeholder conditions (e.g., always false) to form extra
@@ -17,124 +18,75 @@
 // While minimal in scope, this approach obscures direct analysis of the control
 // flow, making it harder for an adversary to understand the program structure.
 //
-
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-
 #include "llvm/IR/PassManager.h"
+#include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+#include "llvm/Support/WithColor.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
 using namespace llvm;
 
-//
-// Legacy Pass (for the old pass manager)
-//
-namespace {
-struct SimplifiedBreakCF : public FunctionPass {
-  static char ID;
-  SimplifiedBreakCF() : FunctionPass(ID) {}
-
-  bool runOnFunction(Function &F) override {
-    bool modified = false;
-
-    // We’ll collect our insertion points first, to avoid invalidating iterators
-    // as we transform blocks.
-    SmallVector<BasicBlock *, 8> blocksToTransform;
-
-    // Simple criterion: we attempt to transform all "non-trivial" blocks.
-    for (auto &BB : F) {
-      // Skip empty blocks or the entry block to avoid messing up control flow.
-      if (BB.size() > 1 && &BB != &F.getEntryBlock()) {
-        blocksToTransform.push_back(&BB);
-      }
-    }
-
-    // Transform each chosen block
-    for (auto *BB : blocksToTransform) {
-      Instruction *Term = BB->getTerminator();
-      if (!Term)
-        continue;
-
-      // Create a new basic block immediately after BB
-      BasicBlock *OriginalNext = BB->getNextNode(); 
-      BasicBlock *SplitBlock = BasicBlock::Create(
-          F.getContext(), BB->getName() + ".split", &F, OriginalNext);
-
-      // Insert an unconditional jump in the new block to the original successor
-      IRBuilder<> builder(SplitBlock);
-      builder.CreateBr(Term->getSuccessor(0));
-
-      // Now replace the old terminator with a conditional branch.
-      // We'll use a dummy condition that's always false as a simple example.
-      IRBuilder<> builderBB(Term);
-      Value *cond = builderBB.getInt1(false);
-
-      BasicBlock *origSucc = Term->getSuccessor(0);
-      auto *newBr = BranchInst::Create(origSucc, SplitBlock, cond);
-
-      // Replace the old terminator
-      ReplaceInstWithInst(Term, newBr);
-
-      modified = true;
-    }
-
-    return modified;
-  }
-};
-} // namespace
-
-char SimplifiedBreakCF::ID = 0;
-
-// Register the legacy pass for the old pass manager
-static RegisterPass<SimplifiedBreakCF>
-    X("simplified-break-cf",
-      "A simplified control-flow breaking pass that inserts dummy conditional branches",
-      false, // CFG Only?
-      false  // Is analysis?
-    );
-
-//
-// New Pass Manager-compatible pass
-//
 struct SimplifiedBreakCFPass : public PassInfoMixin<SimplifiedBreakCFPass> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
     bool modified = false;
 
+    // Print a note to show the pass is running on this function
+    llvm::WithColor::note() << "Complicating: " << F.getName() << '\n';
+
     SmallVector<BasicBlock *, 8> blocksToTransform;
     for (auto &BB : F) {
-      if (BB.size() > 1 && &BB != &F.getEntryBlock()) {
+      // Skip if it's the entry block or trivially small
+      if (&BB == &F.getEntryBlock() || BB.size() <= 1)
+        continue;
+
+      Instruction *Term = BB.getTerminator();
+      if (!Term)
+        continue;
+
+      // We only handle blocks with exactly one successor.
+      if (Term->getNumSuccessors() == 1)
         blocksToTransform.push_back(&BB);
-      }
     }
 
+    // Now do our transformations
     for (auto *BB : blocksToTransform) {
       Instruction *Term = BB->getTerminator();
       if (!Term)
         continue;
 
+      // For safety, re-check we have exactly one successor
+      if (Term->getNumSuccessors() != 1)
+        continue;
+
+      // Create a new block (SplitBlock) right after BB in the function.
       BasicBlock *OriginalNext = BB->getNextNode();
       BasicBlock *SplitBlock = BasicBlock::Create(
           F.getContext(), BB->getName() + ".split", &F, OriginalNext);
 
+      // In the new block, place an unconditional branch to the old successor
       IRBuilder<> builder(SplitBlock);
       builder.CreateBr(Term->getSuccessor(0));
 
+      // Replace the old terminator with a conditional branch:
+      //  - false => go to SplitBlock
+      //  - true  => go to the old successor
       IRBuilder<> builderBB(Term);
-      Value *cond = builderBB.getInt1(false);
+      Value *cond = builderBB.getInt1(false); // always false, naive example
 
-      BasicBlock *origSucc = Term->getSuccessor(0);
-      auto *newBr = BranchInst::Create(origSucc, SplitBlock, cond);
+      BasicBlock *oldSucc = Term->getSuccessor(0);
+      auto *newBr = BranchInst::Create(oldSucc, SplitBlock, cond);
 
+      // Replace the old terminator with our new branch
       ReplaceInstWithInst(Term, newBr);
-
+      // llvm::dbgs() << F << '\n';
       modified = true;
     }
 
@@ -142,26 +94,22 @@ struct SimplifiedBreakCFPass : public PassInfoMixin<SimplifiedBreakCFPass> {
   }
 };
 
-//
-// Pass Plugin Initialization
-//
-PassPluginLibraryInfo getSimplifiedBreakCFPluginInfo() {
-  return {
-      LLVM_PLUGIN_API_VERSION, "kovid-simplified-break-cf", "0.0.1",
-      [](PassBuilder &PB) {
-        // Register our pass for the new pass manager’s pipeline.
-        // Example: Insert early in the pipeline or wherever is appropriate.
-        PB.registerPipelineEarlySimplificationEPCallback(
-            [&](ModulePassManager &MPM, auto) {
-              // We wrap our function pass to run on each function in the module
-              MPM.addPass(createModuleToFunctionPassAdaptor(SimplifiedBreakCFPass()));
-              return true;
-            });
-      }
+// New Pass Manager registration
+PassPluginLibraryInfo getPassPluginInfo() {
+  const auto callback = [](PassBuilder &PB) {
+    // Insert the pass into the "early simplification" pipeline (you could
+    // choose a different EP)
+    PB.registerPipelineEarlySimplificationEPCallback([&](ModulePassManager &MPM,
+                                                         auto) {
+      // We adapt the pass to run per function
+      MPM.addPass(createModuleToFunctionPassAdaptor(SimplifiedBreakCFPass()));
+      return true;
+    });
   };
+
+  return {LLVM_PLUGIN_API_VERSION, "kovid-break-cf", "0.0.1", callback};
 }
 
-// This is the core "hook" for the new pass manager plugin
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
-  return getSimplifiedBreakCFPluginInfo();
+  return getPassPluginInfo();
 }
