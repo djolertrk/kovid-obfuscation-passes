@@ -20,6 +20,7 @@ add_subdirectory(RemoveMetadataAndUnusedCode)
 add_subdirectory(InstructionObfuscation)
 add_subdirectory(StringEncryption)
 add_subdirectory(BreakCFG)
+add_subdirectory(CFFlattening)
 add_subdirectory(tools)
 
 install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)
