@@ -215,6 +215,15 @@ But, for example, if you want to debug code that was processed with `libKoviDStr
 
 Some of the plugins are being used for obfuscated build of an awesome, open-source rootkit - [KoviD](https://github.com/carloslack/KoviD).
 
+## Run tests
+
+Please note that we need `lit` and `FileCheck` in `PATH`, also add `-DENABLE_TESTS=ON` during build configuration.
+
+```bash
+export PATH=/path/to/llvm/bin/:$PATH
+ninja check-passes
+```
+
 ## Contact
 
 New ideas? Drop me a message at djolertrk@gmail.com

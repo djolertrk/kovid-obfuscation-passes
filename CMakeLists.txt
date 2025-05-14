@@ -23,4 +23,9 @@ add_subdirectory(BreakCFG)
 add_subdirectory(CFFlattening)
 add_subdirectory(tools)
 
+option(ENABLE_TESTS "Enable Tests" OFF)
+if(ENABLE_TESTS)
+  add_subdirectory(test)
+endif()
+
 install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)

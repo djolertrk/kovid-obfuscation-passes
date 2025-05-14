@@ -1,0 +1,22 @@
+# -*- Python -*-
+
+# Configuration file for the 'lit' test runner.
+
+import os
+import platform
+
+# Set configuration variables that will be available in lit.cfg.py
+config.kovid_obj_root = "@CMAKE_BINARY_DIR@"
+config.kovid_src_root = "@CMAKE_SOURCE_DIR@"
+config.filecheck_path = "@FILECHECK_PATH@"
+config.not_path = "@NOT_PATH@"
+config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
+config.deploy_tests = "@DEPLOY@"
+config.cross_tests = "@CROSS_TESTS@"
+config.native_tests = "@NATIVE_TESTS@"
+config.llvm_version_major = "@LLVM_VERSION_MAJOR@"
+config.llvm_version_minor = "@LLVM_VERSION_MINOR@"
+config.target_triple = "@TARGET_TRIPLE@"
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@CMAKE_CURRENT_SOURCE_DIR@/lit.cfg.py")

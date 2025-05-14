@@ -1,0 +1,12 @@
+# REQUIRES: 0
+# RUN: %clang -O2 -fpass-plugin=%cf_flattening_plugin -c %S/Inputs/cf-flattening-basic.c -o %t
+# RUN: %llvm-objdump --disassemble %t | %FileCheck %s
+
+// Test that the CFFlattening pass successfully flattens the control flow graph
+// Compile with: clang -O2 -emit-llvm -c Inputs/cf-flattening-basic.c -o test.bc
+// Then: opt -load-pass-plugin=libKoviDCFFlattening.so -passes="kovid-cf-flattening" test.bc -o test_obf.bc
+
+// CHECK: <flattening_target>:
+// CHECK: cmp
+// CHECK: b.{{[a-z]+}}
+// We expect more complex control flow with dispatcher-like pattern
