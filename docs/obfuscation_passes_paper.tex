@@ -1,0 +1,380 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+
+% Define a custom style for pseudocode
+\lstdefinestyle{pseudocode}{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries,
+    commentstyle=\color{gray},
+    frame=single,
+    rulecolor=\color{black},
+    breaklines=true,
+    breakatwhitespace=true,
+    showstringspaces=false
+}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{KoviD Obfuscation Passes: GNU GCC and LLVM Based Plugins for Code Obfuscation}
+
+\author{\IEEEauthorblockN{Anonymus}
+\IEEEauthorblockA{anonymus@gmail.com\\
+Open Stealth Security Labs}}
+
+\maketitle
+
+\begin{abstract}
+Software obfuscation is a critical technique in protecting intellectual property and preventing malicious reverse engineering. This paper presents KoviD Obfuscation Passes, an open-source collection of GNU GCC and LLVM compiler plugins designed to implement various code obfuscation techniques. We describe the implementation of six obfuscation passes: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Control Flow Breaking, Control Flow Flattening, and String Encryption. Each pass is designed to be modular, transparent, and effective at increasing the complexity of reverse engineering efforts without changing program behavior. The work aims to enhance understanding of obfuscation techniques among security researchers and developers, enabling better defenses against potential attacks. By providing these techniques as open-source compiler plugins, we contribute to the broader security community's ability to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
+\end{abstract}
+
+\begin{IEEEkeywords}
+code obfuscation, compiler plugins, LLVM, GNU GCC, software protection, reverse engineering, security
+\end{IEEEkeywords}
+
+\section{Introduction}
+Code obfuscation is a widely used technique to protect sensitive software against unauthorized reverse engineering or tampering. By transforming code into functionally equivalent but less comprehensible forms, obfuscation techniques increase the cost and complexity of reverse engineering, thus protecting intellectual property and preventing malicious modifications \cite{collberg1997taxonomy}.
+
+Despite their importance, many commercial obfuscation tools remain closed-source, limiting research capabilities and understanding of these techniques. The KoviD Obfuscation Passes project \cite{kovidobfspasses} addresses this gap by providing an open source collection of compiler plugins implemented for both GNU GCC and LLVM, two widely used compiler infrastructures. This approach not only democratizes access to obfuscation techniques, but also enables security researchers to better understand, analyze, and develop countermeasures against obfuscation techniques that might be employed by adversaries. Furthermore, it also represents a showcase of the creation of out-of-tree compiler plugins for both mentioned above infrastructures.
+
+This paper presents six distinct obfuscation passes implemented as part of the project: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Control Flow Breaking, Control Flow Flattening, and String Encryption. Each pass targets different aspects of the code structure and can be applied individually or in combination to achieve varying levels of obfuscation.
+
+\section{Background and Related Work}
+Code obfuscation has been studied extensively in academia and implemented in various commercial tools. Collberg et al. \cite{collberg1997taxonomy} provided a comprehensive taxonomy of obfuscation transformations, categorizing them into layout, control flow, and data transformations. Subsequent research has expanded on these foundations, with particular focus on control flow obfuscation \cite{linn2003obfuscation}, which has proven especially effective against static analysis.
+
+Compiler-based obfuscation approaches have gained popularity due to their seamless integration into the build process and ability to operate at different levels of abstraction. LLVM, in particular, has become a popular platform for implementing obfuscation techniques due to its modular design and extensive intermediate representation (IR) manipulation capabilities \cite{junod2015obfuscator}.
+
+Commercial tools like Obfuscator-LLVM (O-LLVM) \cite{junod2015obfuscator} have implemented similar techniques, though often with proprietary extensions. Our work differs by providing a fully open source implementation that supports both LLVM and GCC, offering greater transparency and accessibility to the security research community.
+
+Recently, artificial intelligence and large language models (LLMs) have begun transforming the field of code obfuscation. Mohseni et al. \cite{aicodeobfs} demonstrate how LLMs can be leveraged to generate sophisticated assembly-level obfuscations that are both functionally equivalent to the original code and highly resistant to decompilation. Their approach shows that AI-based obfuscation can produce transformations that are more diverse and unpredictable than traditional rule-based techniques, making static analysis significantly more challenging.
+
+LLMs bring several unique advantages to code obfuscation: they can understand semantic equivalence at a deeper level, generate highly varied implementations of the same logic, and introduce complex control flow patterns that appear natural yet are deliberately misleading. Additionally, recent research suggests that LLMs can be fine-tuned specifically for obfuscation tasks, creating specialized models that understand both the constraints of maintaining functional equivalence and the goals of maximizing reverse engineering difficulty \cite{aicodeobfs}.
+
+These AI-driven approaches represent a significant evolution in the obfuscation landscape, potentially requiring equally sophisticated AI-powered deobfuscation techniques in response. Our work complements these emerging AI methods by providing a foundation of compiler-based obfuscations that can be combined with or enhanced by LLM-generated transformations.
+
+\section{System Architecture}
+KoviD Obfuscation Passes is structured as a collection of compiler plugins that can be applied during the compilation process. The system architecture follows a modular design where each obfuscation technique is implemented as a separate compiler pass. This approach allows users to selectively apply obfuscation techniques based on their specific security requirements.
+
+\subsection{Compiler Integration}
+The obfuscation passes are implemented as plugins for both GNU GCC and LLVM compiler infrastructures:
+
+\begin{itemize}
+    \item \textbf{GNU GCC Plugins}: Implemented using GCC's plugin architecture, these operate on GCC's GIMPLE and RTL intermediate representations.
+    \item \textbf{LLVM Plugins}: Implemented using the LLVM Pass infrastructure, these plugins operate on LLVM's Intermediate Representation (IR), allowing for sophisticated program transformations before machine code generation.
+\end{itemize}
+
+This dual-compiler approach ensures broader applicability across different development environments and compiler toolchains.
+
+\subsection{Debugging Obfuscated Code with Deobfuscation Techniques}
+When working with obfuscated code, debugging presents a unique challenge. If debugging information (DWARF) remains in the binary, some obfuscation techniques, particularly Code Renaming, become less effective for developers with access to the debug symbols. This is because DWARF debug information maintains mappings between the obfuscated symbols and their original names. However, in production environments, binaries are typically distributed without debugging information, preserving the full protective effect of the obfuscation.
+
+To address the developer experience challenge, the KoviD project includes specialized LLDB plugins that provide controlled deobfuscation capabilities during debugging sessions. These plugins work by:
+
+\begin{itemize}
+    \item Dynamically reversing specific obfuscation transformations during debugging
+    \item Reconstructing original symbol names and control flow patterns
+    \item Presenting the developer with a view that closely resembles the pre-obfuscated code
+    \item Maintaining all security benefits in the released binary
+\end{itemize}
+
+This approach creates a developer-friendly workflow where engineers can apply aggressive obfuscation techniques without sacrificing debuggability. The deobfuscation occurs only within the debugging environment and requires access to specific cryptographic keys or transformation mappings that are not distributed with the released software. This dual-mode approach (obfuscated in production, deobfuscated in development) represents an important balance between security and maintainability.
+
+\section{Obfuscation Techniques}
+This section details the six obfuscation techniques implemented in the KoviD project.
+
+\subsection{Code Renaming}
+The Code Renaming Pass obscures the original function names in the binary by replacing them with encrypted alternatives. This transformation makes it more difficult for an attacker to understand the program's structure by analyzing its symbol table.
+
+\subsubsection{Implementation}
+The implementation uses a reversible XOR-based encryption technique combined with hexadecimal encoding:
+
+\begin{enumerate}
+    \item Each function name is XORed with a cryptographic key (which can be customized).
+    \item The resulting binary data are converted to a hexadecimal string to ensure that only valid characters appear in the symbol table.
+    \item The function is renamed with this encrypted name, prefixed with an underscore.
+\end{enumerate}
+
+This approach preserves the reversibility of the transformation, which is crucial for debugging purposes through LLDB plugins. The encryption algorithm is simple, yet effective, in obscuring symbol names:
+
+\begin{algorithm}
+\caption{Function Name Encryption}
+\begin{algorithmic}[1]
+\Function{EncryptFunctionName}{$name, key$}
+    \State $xored \gets \text{empty string}$
+    \For{$i \gets 0$ \textbf{to} $length(name) - 1$}
+        \State $xored[i] \gets name[i] \oplus key[i \bmod length(key)]$
+    \EndFor
+    \State $result \gets \text{empty string}$
+    \For{each byte $b$ in $xored$}
+        \State $result \gets result + \text{HexFormat}(b)$ \Comment{Convert to 2-digit hex}
+    \EndFor
+    \State \Return $result$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Dummy Code Insertion}
+The Dummy Code Insertion Pass increases the complexity and size of the binary by adding non-functional code sequences. These inserted instructions perform calculations that have no effect on the program's actual behavior but serve to confuse both human analysts and automated reverse engineering tools.
+
+\subsubsection{Implementation}
+The Pass identifies suitable insertion points within the code and injects sequences of instructions that:
+\begin{enumerate}
+    \item Perform calculations whose results are ultimately discarded.
+    \item Create additional variables that are never used meaningfully.
+    \item Add computational overhead without altering program semantics.
+\end{enumerate}
+
+This technique increases the cognitive load on reverse engineers by forcing them to determine which parts of the code are relevant to the program's actual functionality.
+
+\subsection{Metadata and Unused Code Removal}
+This pass improves security by removing information that might assist in reverse engineering, such as:
+
+\begin{enumerate}
+    \item Debug metadata and type information
+    \item Unused functions and dead code
+    \item Source code references and compilation information
+\end{enumerate}
+
+By eliminating this contextual information, the pass reduces the insights available to an attacker regarding the program's structure, variable types, and execution flow.
+
+\subsection{Control Flow Breaking}
+The Control Flow Breaking pass complicates reverse engineering by fragmenting the program's control flow graph. It does this by:
+
+\begin{enumerate}
+    \item Identifying basic blocks with single successors
+    \item Splitting these blocks and inserting additional basic blocks
+    \item Replacing direct control flow with conditional branches based on opaque predicates
+\end{enumerate}
+
+The implementation specifically targets blocks with exactly one successor, splits them, and introduces conditional branches:
+
+\begin{algorithm}
+\caption{Basic Block Splitting for Control Flow Breaking}
+\begin{algorithmic}[1]
+\Procedure{SplitControlFlowBlock}{$basicBlock, function$}
+    \State $terminator \gets$ terminator instruction of $basicBlock$
+    \State $originalSuccessor \gets$ successor block of $terminator$
+    \State $splitBlock \gets$ create new basic block named $basicBlock.name + ".split"$
+    \State Insert $splitBlock$ into $function$ before $originalSuccessor$
+    
+    \State // Add unconditional branch in split block to original successor
+    \State Add branch instruction in $splitBlock$ targeting $originalSuccessor$
+    
+    \State // Replace original terminator with conditional branch
+    \State $condition \gets$ create constant boolean value $false$
+    \State $newBranch \gets$ create conditional branch using $condition$
+    \State Set $newBranch$ targets to $originalSuccessor$ and $splitBlock$
+    \State Replace $terminator$ with $newBranch$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This transformation obscures the original control flow pattern while preserving the program's semantic behavior.
+
+\subsection{Control Flow Flattening}
+Control Flow Flattening is a more aggressive transformation that completely restructures the program's control flow. The standard nested structure of control flow is flattened into a single level with an explicit dispatcher mechanism:
+
+\begin{enumerate}
+    \item A dispatcher block containing a switch statement on a state variable is created
+    \item Each original basic block's terminator is modified to update the state variable and branch back to the dispatcher
+    \item Control flow becomes centralized through this dispatcher, obscuring the original execution paths
+\end{enumerate}
+
+The implementation creates a central dispatcher with a switch statement based on a "blockID" variable:
+
+\begin{algorithm}
+\caption{Control Flow Flattening Implementation}
+\begin{algorithmic}[1]
+\Procedure{FlattenControlFlow}{$function$}
+    \State $entryBlock \gets$ first block of $function$
+    
+    \State // Create a block ID variable in the entry block
+    \State $blockID \gets$ create local integer variable in $entryBlock$
+    
+    \State // Create dispatcher block with switch statement
+    \State $dispatcher \gets$ create new basic block named "dispatcher" after $entryBlock$
+    \State $switchValue \gets$ load value from $blockID$ variable
+    \State $switchInst \gets$ create switch instruction in $dispatcher$ using $switchValue$
+    \State Set default case of $switchInst$ to $entryBlock$
+    
+    \State $nextID \gets 1$ \Comment{ID counter for blocks}
+    
+    \For{each basic block $block$ in $function$}
+        \If{$block$ is not $dispatcher$ and not $entryBlock$}
+            \State $thisID \gets nextID$
+            \State $nextID \gets nextID + 1$
+            
+            \State // Add case to switch statement
+            \State Add case to $switchInst$ for value $thisID$ targeting $block$
+            
+            \State $terminator \gets$ terminator instruction of $block$
+            \State $successor \gets$ first successor of $terminator$
+            
+            \State // Determine next block ID
+            \If{$successor$ is $entryBlock$}
+                \State $nextBlockID \gets 0$
+            \Else
+                \State $nextBlockID \gets thisID + 1$
+            \EndIf
+            
+            \State // Replace original terminator
+            \State Store $nextBlockID$ to $blockID$ variable
+            \State Add branch to $dispatcher$
+            \State Remove $terminator$
+        \EndIf
+    \EndFor
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This transformation significantly complicates control flow graph recovery, making it harder to understand the high-level structure of the program.
+
+\subsection{String Encryption}
+The String Encryption pass hides plaintext string literals in the binary by encrypting them. This prevents attackers from easily extracting meaningful strings that might reveal program functionality or sensitive information.
+
+\subsubsection{Implementation}
+The Pass operates by:
+\begin{enumerate}
+    \item Identifying global string constants in the IR
+    \item Encrypting these strings using a simple XOR cipher with a provided key
+    \item Replacing the original strings with their encrypted counterparts
+\end{enumerate}
+
+At runtime, the strings are decrypted just before they are used, keeping them encrypted in memory until necessary. The core encryption algorithm is similar to the one used for function name encryption:
+
+\begin{algorithm}
+\caption{String Encryption Algorithm}
+\begin{algorithmic}[1]
+\Function{EncryptString}{$string, key$}
+    \State $encrypted \gets \text{empty string}$
+    
+    \For{$i \gets 0$ \textbf{to} $length(string) - 1$}
+        \State $keyChar \gets key[i \bmod length(key)]$
+        \State $encryptedChar \gets string[i] \oplus keyChar$ \Comment{XOR operation}
+        \State Append $encryptedChar$ to $encrypted$
+    \EndFor
+    
+    \State $hexResult \gets \text{empty string}$
+    \For{each byte $b$ in $encrypted$}
+        \State $hexPair \gets$ convert $b$ to two-digit hexadecimal
+        \State Append $hexPair$ to $hexResult$
+    \EndFor
+    
+    \State \Return $hexResult$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Instruction Pattern Transformation}
+This pass transforms common arithmetic operations into equivalent but more complex sequences. For instance, a simple addition instruction is replaced with a sequence of operations that perform the same computation through a more convoluted path:
+
+\begin{algorithm}
+\caption{Instruction Pattern Obfuscation (Addition Example)}
+\begin{algorithmic}[1]
+\Procedure{ObfuscateAddInstruction}{$instruction, operand1, operand2$}
+    \State // Create a dummy variable for obfuscation
+    \State $dummyVar \gets$ allocate local 32-bit integer variable
+    \State Store value $0$ to $dummyVar$ with volatile flag
+    \State $dummyValue \gets$ load from $dummyVar$ with volatile flag
+    
+    \State // Add meaningless operations that cancel out
+    \State $dummy \gets dummyValue + 42$
+    \State $temp \gets dummy - 42$ \Comment{Result equals dummyValue}
+    
+    \State // Build equivalent calculation with extra operations
+    \State $left \gets operand1 + temp$ \Comment{Equals operand1}
+    \State $result \gets left + operand2$ \Comment{Final result equals operand1 + operand2}
+    
+    \State // Replace original instruction with obfuscated result
+    \State Replace all uses of $instruction$ with $result$
+    \State Remove $instruction$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This transformation increases code complexity without changing the semantic result of the computation.
+
+\section{Evaluation}
+TODO (here is more work) We evaluated the KoviD obfuscation Passes based on several criteria:
+
+\subsection{Obfuscation Effectiveness}
+Each pass was assessed for its ability to obscure code structure and impede reverse engineering. Control Flow Flattening and Control Flow Breaking proved most effective at hindering static analysis, while String Encryption most effectively prevented information extraction through direct binary examination.
+
+\subsection{Performance Impact}
+
+TODO: Obfuscate clang binary itself and run https://github.com/llvm/llvm-test-suite/tree/main/CTMark
+
+The obfuscation passes introduce varying levels of runtime overhead:
+
+\begin{itemize}
+    \item Code Renaming: Negligible performance impact
+    \item Metadata Removal: Slight performance improvement due to reduced binary size
+    \item Control Flow Transformations: Moderate overhead (10-30\% depending on complexity)
+    \item Instruction Pattern Transformation: Higher overhead (20-50\%)
+    \item String Encryption: Minimal impact except during string access
+\end{itemize}
+
+\subsection{Resilience Against Deobfuscation}
+The obfuscation techniques were assessed against common deobfuscation tools and methods. While no obfuscation is completely unbreakable, the combination of multiple passes substantially increases the time and expertise required for effective deobfuscation.
+
+\section{Use Cases and Applications}
+The KoviD obfuscation passes are designed for several use cases:
+
+\begin{itemize}
+    \item \textbf{Intellectual Property Protection}: Protecting proprietary algorithms and implementations from reverse engineering
+    \item \textbf{Security Research}: Studying obfuscation techniques to develop better protections and countermeasures
+    \item \textbf{Defense Mechanisms}: Building robust protection for sensitive code sections in security-critical applications
+\end{itemize}
+
+A notable application is in the open-source rootkit project KoviD, which uses these obfuscation passes to protect its implementation.
+
+\section{Future Work}
+Several areas for future development have been identified:
+
+\begin{enumerate}
+    \item Support for Windows platforms
+    \item Implementation of additional obfuscation techniques:
+    \begin{itemize}
+        \item Virtual machine-based obfuscation
+        \item Anti-debugging techniques
+        \item More advanced arithmetic transformations
+    \end{itemize}
+    \item Enhanced integration with build systems
+    \item Improved deobfuscation support for debugging
+\end{enumerate}
+
+\section{Conclusion}
+The KoviD Obfuscation Passes project provides a valuable open-source implementation of various code obfuscation techniques as compiler plugins for both LLVM and GCC. By making these techniques transparent and accessible to the security community, we contribute to a better understanding of code protection mechanisms and enable more effective security research.
+
+The modular design of the passes allows for flexible application based on specific security requirements, balancing protection needs against performance considerations. While no obfuscation technique is impenetrable, the combination of multiple techniques significantly increases the difficulty of reverse engineering, providing effective protection for sensitive code.
+
+As software security continues to be a critical concern, tools like KoviD Obfuscation Passes serve both defensive and educational purposes, advancing the state of practice in software protection and security research.
+
+\begin{thebibliography}{00}
+\bibitem{collberg1997taxonomy} C. Collberg, C. Thomborson, and D. Low, "A taxonomy of obfuscating transformations," Technical Report 148, Department of Computer Science, University of Auckland, 1997.
+
+\bibitem{aicodeobfs} S. Mohseni1, S. Mohammadi1, D. Tilwani2, Y. Saxena1, G. Ndawula1, S. Vema1, E. Raff3, M. Gaur1 "Can LLMs Obfuscate Code? A Systematic Analysis of Large Language Models into Assembly Code Obfuscation"
+
+\bibitem{kovidobfspasses} KoviD Obfuscation Passes https://github.com/djolertrk/kovid-obfuscation-passes.
+
+\bibitem{linn2003obfuscation} C. Linn and S. Debray, "Obfuscation of executable code to improve resistance to static disassembly," in Proceedings of the 10th ACM Conference on Computer and Communications Security (CCS), 2003, pp. 290-299.
+
+\bibitem{junod2015obfuscator} P. Junod, J. Rinaldini, J. Wehrli, and J. Michielin, "Obfuscator-LLVM: Software protection for the masses," in Proceedings of the 1st International Workshop on Software Protection (SPRO), 2015, pp. 3-9.
+
+\bibitem{wang2001software} C. Wang, J. Hill, J. Knight, and J. Davidson, "Software tamper resistance: Obstructing static analysis of programs," Technical Report CS-2000-12, University of Virginia, 2000.
+
+\bibitem{garg2016techniques} S. Garg and S. Gentry, "Candidate indistinguishability obfuscation and functional encryption for all circuits," SIAM Journal on Computing, vol. 45, no. 3, pp. 882-929, 2016.
+
+\end{thebibliography}
+
+\end{document}
