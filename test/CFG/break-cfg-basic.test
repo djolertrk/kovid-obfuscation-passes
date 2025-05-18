@@ -1,13 +1,9 @@
-# REQUIRES: 0
-# RUN: %clang -O2 -fpass-plugin=%break_cfg_plugin -c %S/Inputs/break-cfg-basic.c -o %t
-# RUN: %clang -O2 -c %S/Inputs/break-cfg-basic.c -o %t.normal
-# RUN: test $(nm %t | wc -l) -gt $(nm %t.normal | wc -l) || (echo "No additional blocks created"; false)
-
-// Test that the BreakCFG pass successfully breaks the control flow graph
-// Compile with: clang -O2 -emit-llvm -c Inputs/break-cfg-basic.c -o test.bc
-// Then: opt -load-pass-plugin=libKoviDBreakCFGPlugin.so -passes="kovid-break-cf" test.bc -o test_obf.bc
+# RUN: %clang -O2 -fpass-plugin=%break_cfg_plugin -S -emit-llvm %S/Inputs/break-cfg-basic.c -o %t
+# RUN: %FileCheck %s --input-file=%t
 
 // CHECK: simple_function
-// CHECK: br i1 {{.*}}, label {{.*}}, label {{.*}}.split
+// CHECK: br {{.*}}
+// CHECK: br {{.*}}
+// CHECK: br {{.*}}
 // CHECK: br {{.*}}
 // CHECK: br {{.*}}

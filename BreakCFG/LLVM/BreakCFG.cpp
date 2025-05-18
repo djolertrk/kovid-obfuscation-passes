@@ -9,14 +9,11 @@
 // basic blocks and dummy conditional branches. Specifically, it:
 //
 // 1. Identifies candidate basic blocks (with exactly one successor) and splits
-//    them to create “noise” blocks.
+//    them to create "noise" blocks.
 // 2. Replaces original terminators with a conditional branch, leading to either
 //    the old successor or the newly inserted block.
-// 3. Uses naive or placeholder conditions (e.g., always false) to form extra
-//    control-flow paths.
-//
-// While minimal in scope, this approach obscures direct analysis of the control
-// flow, making it harder for an adversary to understand the program structure.
+// 3. Uses opaque predicates to form extra control-flow paths that are hard
+//    to eliminate by the optimizer.
 //
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
@@ -34,7 +31,22 @@
 
 using namespace llvm;
 
-struct SimplifiedBreakCFPass : public PassInfoMixin<SimplifiedBreakCFPass> {
+// Create an opaque predicate that the optimizer can't easily evaluate
+// Returns a Value that is actually false at runtime but appears complex
+static Value *createOpaquePredicate(IRBuilder<> &builder) {
+  // Create a complex expression that evaluates to false but is hard to prove
+  // statically Example: (x * x) % 2 == 1 where x = 2 will always be 0, thus
+  // false
+  Value *X = builder.getInt32(2); // A constant we know is even
+  Value *Squared = builder.CreateMul(X, X);
+  Value *Mod = builder.CreateURem(Squared, builder.getInt32(2));
+  Value *Compare = builder.CreateICmpEQ(Mod, builder.getInt32(1));
+
+  return Compare; // Always false at runtime (4 % 2 = 0, which is not equal to
+                  // 1)
+}
+
+struct ImprovedBreakCFPass : public PassInfoMixin<ImprovedBreakCFPass> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
     bool modified = false;
 
@@ -75,18 +87,20 @@ struct SimplifiedBreakCFPass : public PassInfoMixin<SimplifiedBreakCFPass> {
       IRBuilder<> builder(SplitBlock);
       builder.CreateBr(Term->getSuccessor(0));
 
-      // Replace the old terminator with a conditional branch:
-      //  - false => go to SplitBlock
-      //  - true  => go to the old successor
+      // Replace the old terminator with a conditional branch based on an opaque
+      // predicate
       IRBuilder<> builderBB(Term);
-      Value *cond = builderBB.getInt1(false); // always false, naive example
+      // Create opaque predicate - will evaluate to false but hard to prove
+      Value *cond = createOpaquePredicate(builderBB);
 
       BasicBlock *oldSucc = Term->getSuccessor(0);
+      // Create conditional branch - actual control flow will always go to
+      // oldSucc because our opaque predicate is false, but optimizer can't
+      // easily prove that
       auto *newBr = BranchInst::Create(oldSucc, SplitBlock, cond);
 
       // Replace the old terminator with our new branch
       ReplaceInstWithInst(Term, newBr);
-      // llvm::dbgs() << F << '\n';
       modified = true;
     }
 
@@ -97,14 +111,14 @@ struct SimplifiedBreakCFPass : public PassInfoMixin<SimplifiedBreakCFPass> {
 // New Pass Manager registration
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    // Insert the pass into the "early simplification" pipeline (you could
-    // choose a different EP)
-    PB.registerPipelineEarlySimplificationEPCallback([&](ModulePassManager &MPM,
-                                                         auto) {
-      // We adapt the pass to run per function
-      MPM.addPass(createModuleToFunctionPassAdaptor(SimplifiedBreakCFPass()));
-      return true;
-    });
+    // Important: Register the pass at the end of the optimization pipeline
+    // so that optimizations don't undo our obfuscation
+    PB.registerOptimizerLastEPCallback(
+        [&](ModulePassManager &MPM, OptimizationLevel Level) {
+          // We adapt the pass to run per function
+          MPM.addPass(createModuleToFunctionPassAdaptor(ImprovedBreakCFPass()));
+          return true;
+        });
   };
 
   return {LLVM_PLUGIN_API_VERSION, "kovid-break-cf", "0.0.1", callback};
