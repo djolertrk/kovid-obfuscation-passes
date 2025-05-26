@@ -1,6 +1,0 @@
-# RUN: %clang -O1 -fpass-plugin=%cf_flattening_plugin -S -emit-llvm %S/Inputs/cf-flattening-basic.c -o %t
-# RUN: %FileCheck %s --input-file=%t
-
-// CHECK: flattening_target
-
-# TODO: Improve this pass.

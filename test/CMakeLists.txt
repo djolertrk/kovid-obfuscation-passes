@@ -8,12 +8,13 @@ else()
 endif()
 
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+message(STATUS "Using LLVM_VERSION_MAJOR: ${LLVM_VERSION_MAJOR}")
 
 include(AddLLVM)
 
 # Find the paths to FileCheck and not
-find_program(FILECHECK_EXE FileCheck FileCheck-${LLVM_VERSION_MAJOR})
-find_program(NOT_EXE not not-${LLVM_VERSION_MAJOR})
+find_program(FILECHECK_EXE NAMES FileCheck FileCheck-${LLVM_VERSION_MAJOR})
+find_program(NOT_EXE NAMES not not-${LLVM_VERSION_MAJOR})
 
 if(NOT FILECHECK_EXE)
     message(FATAL_ERROR "FileCheck executable not found!")

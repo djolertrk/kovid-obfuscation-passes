@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // Author: djolertrk
 //
-// Enhanced Control-Flow Flattening Obfuscation Pass for LLVM
-// ------------------------------------------------------------
+// Control-Flow Taint Obfuscation Pass for LLVM
+// ---------------------------------------------
 //
-// This LLVM pass implements an advanced form of control-flow flattening
+// This LLVM pass implements advanced control flow obfuscation techniques
 // designed to resist aggressive optimization by using:
 // 1. Advanced opaque predicates using a mix of global state and complex
 // calculations
 // 2. Runtime-dependent values to prevent compile-time evaluation
 // 3. Memory aliasing and volatiles to prevent certain optimizations
 // 4. Indirect control flow through function pointers
+// 5. Various control flow complication mechanisms
 //
 
 #include "llvm/IR/BasicBlock.h"
@@ -38,8 +39,7 @@
 using namespace llvm;
 
 // Create a structure with the state needed for advanced obfuscation
-struct EnhancedControlFlowFlattenPass
-    : public PassInfoMixin<EnhancedControlFlowFlattenPass> {
+struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
 
   // Create global variables needed for stronger obfuscation
   GlobalVariable *createGlobalState(Module *M) {
@@ -187,6 +187,80 @@ struct EnhancedControlFlowFlattenPass
     return Step2;
   }
 
+  // Create an opaque predicate that the optimizer can't easily evaluate
+  // Returns a Value that is actually false at runtime but appears complex
+  Value *createOpaquePredicate(IRBuilder<> &builder) {
+    // Create a complex expression that evaluates to false but is hard to prove
+    // statically Example: (x * x) % 2 == 1 where x = 2 will always be 0, thus
+    // false
+    Value *X = builder.getInt32(2); // A constant we know is even
+    Value *Squared = builder.CreateMul(X, X);
+    Value *Mod = builder.CreateURem(Squared, builder.getInt32(2));
+    Value *Compare = builder.CreateICmpEQ(Mod, builder.getInt32(1));
+
+    return Compare; // Always false at runtime (4 % 2 = 0, which is not equal to
+                    // 1)
+  }
+
+  // Break CFG functionality: Add additional basic blocks and dummy conditional
+  // branches
+  bool breakControlFlow(Function &F) {
+    bool modified = false;
+
+    SmallVector<BasicBlock *, 8> blocksToTransform;
+    for (auto &BB : F) {
+      // Skip if it's the entry block or trivially small
+      if (&BB == &F.getEntryBlock() || BB.size() <= 1)
+        continue;
+
+      Instruction *Term = BB.getTerminator();
+      if (!Term)
+        continue;
+
+      // We only handle blocks with exactly one successor.
+      if (Term->getNumSuccessors() == 1)
+        blocksToTransform.push_back(&BB);
+    }
+
+    // Now do our transformations
+    for (auto *BB : blocksToTransform) {
+      Instruction *Term = BB->getTerminator();
+      if (!Term)
+        continue;
+
+      // For safety, re-check we have exactly one successor
+      if (Term->getNumSuccessors() != 1)
+        continue;
+
+      // Create a new block (SplitBlock) right after BB in the function.
+      BasicBlock *OriginalNext = BB->getNextNode();
+      BasicBlock *SplitBlock = BasicBlock::Create(
+          F.getContext(), BB->getName() + ".split", &F, OriginalNext);
+
+      // In the new block, place an unconditional branch to the old successor
+      IRBuilder<> builder(SplitBlock);
+      builder.CreateBr(Term->getSuccessor(0));
+
+      // Replace the old terminator with a conditional branch based on an opaque
+      // predicate
+      IRBuilder<> builderBB(Term);
+      // Create opaque predicate - will evaluate to false but hard to prove
+      Value *cond = createOpaquePredicate(builderBB);
+
+      BasicBlock *oldSucc = Term->getSuccessor(0);
+      // Create conditional branch - actual control flow will always go to
+      // oldSucc because our opaque predicate is false, but optimizer can't
+      // easily prove that
+      auto *newBr = BranchInst::Create(oldSucc, SplitBlock, cond);
+
+      // Replace the old terminator with our new branch
+      ReplaceInstWithInst(Term, newBr);
+      modified = true;
+    }
+
+    return modified;
+  }
+
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
     // Skip empty or entry-only functions
     if (F.empty() || F.size() < 2) {
@@ -195,7 +269,10 @@ struct EnhancedControlFlowFlattenPass
 
     Module *M = F.getParent();
 
-    llvm::WithColor::note() << "Complicating: " << F.getName() << '\n';
+    llvm::WithColor::note() << "Tainting control flow: " << F.getName() << '\n';
+
+    // First, apply control flow breaking to add additional complexity
+    bool cfgBroken = breakControlFlow(F);
 
     // Create global state that will help us make harder-to-optimize code
     GlobalVariable *StateVar = createGlobalState(M);
@@ -312,7 +389,7 @@ struct EnhancedControlFlowFlattenPass
     }
 
     // We've modified the CFG, so preserve nothing
-    return PreservedAnalyses::none();
+    return (cfgBroken ? PreservedAnalyses::none() : PreservedAnalyses::none());
   }
 };
 
@@ -321,13 +398,13 @@ PassPluginLibraryInfo getPassPluginInfo() {
     // Register at the END of the optimization pipeline
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM,
                                            OptimizationLevel Level) {
-      MPM.addPass(
-          createModuleToFunctionPassAdaptor(EnhancedControlFlowFlattenPass()));
+      MPM.addPass(createModuleToFunctionPassAdaptor(ControlFlowTaintPass()));
       return true;
     });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "kovid-cf-flattening", "0.0.1", callback};
+  return {LLVM_PLUGIN_API_VERSION, "kovid-control-flow-taint", "0.0.1",
+          callback};
 };
 
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {

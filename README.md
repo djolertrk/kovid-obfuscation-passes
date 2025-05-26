@@ -40,6 +40,13 @@ sudo apt-get install -y ninja-build
 
 # GCC Plugin Dev Package
 $ sudo apt-get install gcc-12-plugin-dev
+$ sudo apt-get install g++-12
+
+# lit
+$ pip3 install lit
+$ sudo ln -s ~/.local/bin/lit /usr/bin/llvm-lit
+$ which llvm-lit
+/usr/bin/llvm-lit
 ```
 
 ## Build

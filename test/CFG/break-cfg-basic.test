@@ -1,9 +1,0 @@
-# RUN: %clang -O2 -fpass-plugin=%break_cfg_plugin -S -emit-llvm %S/Inputs/break-cfg-basic.c -o %t
-# RUN: %FileCheck %s --input-file=%t
-
-// CHECK: simple_function
-// CHECK: br {{.*}}
-// CHECK: br {{.*}}
-// CHECK: br {{.*}}
-// CHECK: br {{.*}}
-// CHECK: br {{.*}}

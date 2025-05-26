@@ -1,0 +1,6 @@
+# RUN: gcc-12 -O2 -fplugin=%build_lib_dir/libKoviDControlFlowTaintGCCPlugin.so -S %S/Inputs/control-flow-taint-basic.c -o %t
+# RUN: %FileCheck %s --input-file=%t
+
+// CHECK: taint_target
+
+# TODO: Add more sophisticated control flow obfuscation techniques.

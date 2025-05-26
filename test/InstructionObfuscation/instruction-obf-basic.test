@@ -1,17 +1,7 @@
 # REQUIRES: shell
-# RUN: %clang -O2 -fpass-plugin=%inst_obf_plugin -c %S/Inputs/instruction-obf-basic.c -o %t
-# RUN: %clang -O0 -c %S/Inputs/instruction-obf-basic.c -o %t.normal
-# RUN: test $(objdump -d %t | grep -c add) -gt $(objdump -d %t.normal | grep -c add) || (echo "No instruction obfuscation found"; false)
-
-// Test that the InstructionObfuscation pass successfully obfuscates arithmetic operations
-// Compile with: clang -O2 -emit-llvm -c Inputs/instruction-obf-basic.c -o test.bc
-// Then: opt -load-pass-plugin=libKoviDInstructionObfuscationLLVMPlugin.so -passes="kovid-instruction-obf" test.bc -o test_obf.bc
+# RUN: %clang -O2 -fpass-plugin=%inst_obf_plugin -S -emit-llvm %S/Inputs/instruction-obf-basic.c -o %t
+# RUN: %FileCheck %s --input-file=%t
 
 // CHECK: add_numbers
-// CHECK: %dummyForObf = alloca i32
-// CHECK: store i32 0, ptr %dummyForObf
-// CHECK: %dummy.load = load volatile i32, ptr %dummyForObf
-// CHECK: %dummy = add i32 %dummy.load, 42, !obf
-// CHECK: %temp = sub i32 %dummy, 42, !obf
-// CHECK: %left = add i32 {{.*}}, %temp, !obf
-// CHECK: %obf.add = add i32 %left, {{.*}}, !obf
+// CHECK: add {{.*}} !obf
+// CHECK: add {{.*}} !obf

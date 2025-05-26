@@ -149,10 +149,11 @@ plugin_lib_dir = os.path.join(getattr(config, 'kovid_obj_root', '.'), 'lib')
 config.substitutions.append(('%rename_plugin', os.path.join(plugin_lib_dir, 'libKoviDRenameCodeLLVMPlugin' + shared_lib_ext)))
 config.substitutions.append(('%string_encryption_plugin', os.path.join(plugin_lib_dir, 'libKoviDStringEncryptionLLVMPlugin' + shared_lib_ext)))
 config.substitutions.append(('%dummy_code_plugin', os.path.join(plugin_lib_dir, 'libKoviDDummyCodeInsertionLLVMPlugin' + shared_lib_ext)))
-config.substitutions.append(('%break_cfg_plugin', os.path.join(plugin_lib_dir, 'libKoviDBreakCFGLLVMPlugin' + shared_lib_ext)))
-config.substitutions.append(('%cf_flattening_plugin', os.path.join(plugin_lib_dir, 'libKoviDCFFlatteningLLVMPlugin' + shared_lib_ext)))
+config.substitutions.append(('%control_flow_taint_plugin', os.path.join(plugin_lib_dir, 'libKoviDControlFlowTaintLLVMPlugin' + shared_lib_ext)))
 config.substitutions.append(('%inst_obf_plugin', os.path.join(plugin_lib_dir, 'libKoviDInstructionObfuscationPassLLVMPlugin' + shared_lib_ext)))
 config.substitutions.append(('%metadata_plugin', os.path.join(plugin_lib_dir, 'libKoviDRemoveMetadataAndUnusedCodeLLVMPlugin' + shared_lib_ext)))
+
+config.substitutions.append(('%build_lib_dir', os.path.join(plugin_lib_dir, '')))
 
 # Add features based on environment
 if getattr(config, 'native_tests', '1') == '1':

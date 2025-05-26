@@ -8,4 +8,4 @@
 // Looking for encrypted function names instead of original ones
 // CHECK-NOT: t foo
 // CHECK-NOT: t bar
-// CHECK: T _main
+// CHECK: T {{.*}}main
