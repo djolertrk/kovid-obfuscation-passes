@@ -35,7 +35,7 @@ Open Stealth Security Labs}}
 \maketitle
 
 \begin{abstract}
-Software obfuscation is a critical technique in protecting intellectual property and preventing malicious reverse engineering. This paper presents KoviD Obfuscation Passes, an open-source collection of GNU GCC and LLVM compiler plugins designed to implement various code obfuscation techniques. We describe the implementation of five obfuscation passes: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Control Flow Taint, and String Encryption. Each pass is designed to be modular, transparent, and effective at increasing the complexity of reverse engineering efforts without changing program behavior. The work aims to enhance understanding of obfuscation techniques among security researchers and developers, enabling better defenses against potential attacks. By providing these techniques as open-source compiler plugins, we contribute to the broader security community's ability to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
+Software obfuscation is a critical technique in protecting intellectual property and preventing malicious reverse engineering. This paper presents KoviD Obfuscation Passes, an open-source collection of GNU GCC and LLVM compiler plugins designed to implement various code obfuscation techniques. We describe the implementation of six obfuscation passes: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Instruction Pattern Transformation, String Encryption, and Control Flow Taint. The Control Flow Taint pass represents a particularly advanced technique that unifies control flow breaking and flattening into a single, more powerful transformation. Each pass is designed to be modular, transparent, and effective at increasing the complexity of reverse engineering efforts without changing program behavior. The work aims to enhance understanding of obfuscation techniques among security researchers and developers, enabling better defenses against potential attacks. By providing these techniques as open-source compiler plugins, we contribute to the broader security community's ability to study, experiment with, and ultimately counteract obfuscation strategies employed by adversaries.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -47,7 +47,7 @@ Code obfuscation is a widely used technique to protect sensitive software agains
 
 Despite their importance, many commercial obfuscation tools remain closed-source, limiting research capabilities and understanding of these techniques. The KoviD Obfuscation Passes project \cite{kovidobfspasses} addresses this gap by providing an open source collection of compiler plugins implemented for both GNU GCC and LLVM, two widely used compiler infrastructures. This approach not only democratizes access to obfuscation techniques, but also enables security researchers to better understand, analyze, and develop countermeasures against obfuscation techniques that might be employed by adversaries. Furthermore, it also represents a showcase of the creation of out-of-tree compiler plugins for both mentioned above infrastructures.
 
-This paper presents five distinct obfuscation passes implemented as part of the project: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Control Flow Taint, and String Encryption. Each pass targets different aspects of the code structure and can be applied individually or in combination to achieve varying levels of obfuscation.
+This paper presents six distinct obfuscation passes implemented as part of the project: Code Renaming, Dummy Code Insertion, Metadata and Unused Code Removal, Instruction Pattern Transformation, String Encryption, and Control Flow Taint. Each pass targets different aspects of the code structure and can be applied individually or in combination to achieve varying levels of obfuscation. The Control Flow Taint pass represents a particularly advanced technique that merges control flow breaking and flattening into a unified transformation.
 
 \section{Background and Related Work}
 Code obfuscation has been studied extensively in academia and implemented in various commercial tools. Collberg et al. \cite{collberg1997taxonomy} provided a comprehensive taxonomy of obfuscation transformations, categorizing them into layout, control flow, and data transformations. Subsequent research has expanded on these foundations, with particular focus on control flow obfuscation \cite{linn2003obfuscation}, which has proven especially effective against static analysis.
@@ -86,7 +86,7 @@ To address the developer experience challenge, the KoviD project includes specia
 This approach creates a developer-friendly workflow where engineers can apply aggressive obfuscation techniques without sacrificing debuggability. The deobfuscation occurs only within the debugging environment and requires access to specific cryptographic keys or transformation mappings that are not distributed with the released software. This dual-mode approach (obfuscated in production, deobfuscated in development) represents an important balance between security and maintainability.
 
 \section{Obfuscation Techniques}
-This section details the five obfuscation techniques implemented in the KoviD project.
+This section details the six obfuscation techniques implemented in the KoviD project.
 
 \subsection{Code Renaming}
 The Code Renaming Pass obscures the original function names in the binary by replacing them with encrypted alternatives. This transformation makes it more difficult for an attacker to understand the program's structure by analyzing its symbol table.
@@ -144,7 +144,7 @@ This pass improves security by removing information that might assist in reverse
 By eliminating this contextual information, the pass reduces the insights available to an attacker regarding the program's structure, variable types, and execution flow. Specifically, in the LLVM implementation, this pass aggressively removes LLVM Debug Info Metadata even when the -g compilation flag is present, ensuring that debugging information does not leak into the final binary. This approach is particularly effective because it operates at the compiler IR level, allowing it to strip metadata that would otherwise survive traditional stripping tools that operate on final binary.
 
 \subsection{Control Flow Taint}
-The Control Flow Taint pass implements a comprehensive control flow obfuscation strategy that combines multiple techniques to create layered protection against reverse engineering. Unlike traditional approaches that apply single transformations, Control Flow Taint integrates several complementary obfuscation mechanisms:
+The Control Flow Taint pass implements a comprehensive control flow obfuscation strategy that merges and extends the functionality of Control Flow Flattening and Control Flow Breaking techniques. This unified pass creates layered protection against reverse engineering by integrating several complementary obfuscation mechanisms:
 
 \begin{enumerate}
     \item \textbf{Control Flow Breaking}: Fragmenting the program's control flow graph by splitting blocks and inserting opaque predicates
@@ -155,7 +155,7 @@ The Control Flow Taint pass implements a comprehensive control flow obfuscation 
 \end{enumerate}
 
 \subsubsection{Implementation}
-The Control Flow Taint pass applies multiple obfuscation techniques in sequence to maximize protection:
+The Control Flow Taint pass unifies the previously separate Control Flow Flattening and Break CFG passes into a single, more powerful transformation. This merged approach applies multiple obfuscation techniques in sequence to maximize protection:
 
 \begin{algorithm}[H]
 \caption{Control Flow Taint Implementation}
@@ -193,7 +193,7 @@ The Control Flow Taint pass applies multiple obfuscation techniques in sequence 
 \end{algorithmic}
 \end{algorithm}
 
-This comprehensive approach makes Control Flow Taint significantly more resistant to automated deobfuscation tools compared to single-technique approaches. The layered transformations create multiple levels of complexity that must be addressed simultaneously, substantially increasing the time and expertise required for effective reverse engineering.
+By merging Control Flow Breaking and Control Flow Flattening into a single pass, Control Flow Taint achieves synergistic effects where each technique reinforces the others. The breaking phase creates additional basic blocks and opaque predicates that make the subsequent flattening more complex, while the flattening phase obscures the artificial structure introduced by breaking. This comprehensive approach makes Control Flow Taint significantly more resistant to automated deobfuscation tools compared to applying these techniques separately. The layered transformations create multiple levels of complexity that must be addressed simultaneously, substantially increasing the time and expertise required for effective reverse engineering.
 
 \subsection{String Encryption}
 The String Encryption pass hides plaintext string literals in the binary by encrypting them. This prevents attackers from easily extracting meaningful strings that might reveal program functionality or sensitive information.

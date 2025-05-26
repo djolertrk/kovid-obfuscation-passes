@@ -27,6 +27,10 @@ Transforms common arithmetic operations into equivalent but more complex sequenc
 
 Encrypts plaintext string literals in the binary so that sensitive or informative strings are hidden. This prevents attackers from easily gleaning information by simply reading the binary’s embedded strings.
 
+6. ***Control Flow Taint***
+
+Implements advanced control flow obfuscation by combining multiple techniques: control flow breaking with opaque predicates, control flow flattening with dispatcher blocks, and state variable injection. This comprehensive approach creates layered protection that is significantly more resistant to automated deobfuscation tools.
+
 ## Install deps
 
 ```
