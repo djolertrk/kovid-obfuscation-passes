@@ -1,14 +1,15 @@
-add_library(ControlFlowTaintPass MODULE ControlFlowTaint.cpp)
+add_llvm_pass_plugin(libKoviDControlFlowTaintLLVMPlugin
+  ControlFlowTaint.cpp
+    DEPENDS
+    LLVMAnalysis
+    LLVMTransformUtils
+    intrinsics_gen
+  )
 
-target_include_directories(ControlFlowTaintPass PRIVATE "${LLVM_INCLUDE_DIRS}")
-target_compile_features(ControlFlowTaintPass PRIVATE cxx_range_for cxx_auto_type)
-
-# Enable c++17
-target_compile_features(ControlFlowTaintPass PRIVATE cxx_std_17)
-
-# Get proper shared-library behavior when linking with undefined symbols (OS X)
-if(APPLE)
-    set_target_properties(ControlFlowTaintPass PROPERTIES
-        LINK_FLAGS "-undefined dynamic_lookup"
-    )
-endif(APPLE)
+set_target_properties(libKoviDControlFlowTaintLLVMPlugin PROPERTIES EXCLUDE_FROM_ALL OFF)
+set_target_properties(libKoviDControlFlowTaintLLVMPlugin
+    PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)

@@ -15,13 +15,17 @@
 // 6. Various control flow complication mechanisms
 //
 
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
@@ -42,7 +46,7 @@ using namespace llvm;
 struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
 
   // Create global variables needed for stronger obfuscation
-  GlobalVariable *createGlobalState(Module *M) {
+  GlobalVariable *createGlobalState(Module *M, Function &F) {
     // Create a global array to store state - harder to analyze than a simple
     // variable
     ArrayType *StateArrayTy =
@@ -54,10 +58,11 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
         ArrayRef<uint32_t>({0xDEADBEEF, 0xBAADF00D, 0x12345678, 0xABCDEF00}));
 
     // Create the global with internal linkage so it's not visible outside this
-    // module
+    // module - use unique name per function
+    std::string GlobalName = "obfuscation_state_" + F.getName().str();
     GlobalVariable *StateVar = new GlobalVariable(
         *M, StateArrayTy, false, GlobalValue::InternalLinkage, InitData,
-        "obfuscation_state", nullptr, GlobalValue::NotThreadLocal, 0);
+        GlobalName, nullptr, GlobalValue::NotThreadLocal, 0);
 
     return StateVar;
   }
@@ -112,94 +117,19 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     return Builder.CreateICmpEQ(Mod1, Mod2);
   }
 
-  // Store the next block ID using an advanced obfuscation technique
+  // Store the next block ID - simplified version
   void storeAdvancedBlockID(IRBuilder<> &Builder, AllocaInst *BlockIDVar,
                             int NextID, GlobalVariable *StateVar) {
-    // Get the state value and mix it with our next ID
-    Value *IdxList[2] = {
-        ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 0),
-        ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 0)};
-    Value *StateElemPtr = Builder.CreateInBoundsGEP(
-        StateVar->getValueType(), StateVar, IdxList, "state_elem_ptr");
-
-    LoadInst *StateValue = Builder.CreateLoad(
-        Type::getInt32Ty(Builder.getContext()), StateElemPtr);
-    StateValue->setVolatile(true);
-
-    // Use a different element to load the key
-    IdxList[1] = ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 1);
-    Value *KeyElemPtr = Builder.CreateInBoundsGEP(
-        StateVar->getValueType(), StateVar, IdxList, "key_elem_ptr");
-
-    LoadInst *KeyValue =
-        Builder.CreateLoad(Type::getInt32Ty(Builder.getContext()), KeyElemPtr);
-    KeyValue->setVolatile(true);
-
-    // Create a complex obfuscation transformation
+    // Simple store to avoid complex memory operations
     Value *NextIDVal = Builder.getInt32(NextID);
-
-    // Mix the data in a complex way: ((StateValue * NextID) ^ KeyValue) +
-    // (StateValue % 7)
-    Value *Mul = Builder.CreateMul(StateValue, NextIDVal);
-    Value *Xor = Builder.CreateXor(Mul, KeyValue);
-    Value *Mod = Builder.CreateURem(StateValue, Builder.getInt32(7));
-    Value *ObfuscatedID = Builder.CreateAdd(Xor, Mod);
-
-    // Store the obfuscated value
-    StoreInst *IDStore = Builder.CreateStore(ObfuscatedID, BlockIDVar);
-    IDStore->setVolatile(true);
-
-    // Update the state with a new value to create a moving target
-    Value *NewState =
-        Builder.CreateXor(StateValue, Builder.getInt32(NextID * 0x10001001));
-    StoreInst *StateUpdateStore = Builder.CreateStore(NewState, StateElemPtr);
-    StateUpdateStore->setVolatile(true);
+    Builder.CreateStore(NextIDVal, BlockIDVar);
   }
 
-  // Load the block ID using an advanced obfuscation technique
+  // Load the block ID - simplified version
   Value *loadAdvancedBlockID(IRBuilder<> &Builder, AllocaInst *BlockIDVar,
                              GlobalVariable *StateVar) {
-    // Load the obfuscated block ID
-    LoadInst *ObfuscatedID =
-        Builder.CreateLoad(Type::getInt32Ty(Builder.getContext()), BlockIDVar);
-    ObfuscatedID->setVolatile(true);
-
-    // Load the values from our state array to deobfuscate
-    Value *IdxList[2] = {
-        ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 0),
-        ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 0)};
-    Value *StateElemPtr = Builder.CreateInBoundsGEP(
-        StateVar->getValueType(), StateVar, IdxList, "state_elem_ptr");
-
-    LoadInst *StateValue = Builder.CreateLoad(
-        Type::getInt32Ty(Builder.getContext()), StateElemPtr);
-    StateValue->setVolatile(true);
-
-    // Use a different element to load the key
-    IdxList[1] = ConstantInt::get(Type::getInt32Ty(Builder.getContext()), 1);
-    Value *KeyElemPtr = Builder.CreateInBoundsGEP(
-        StateVar->getValueType(), StateVar, IdxList, "key_elem_ptr");
-
-    LoadInst *KeyValue =
-        Builder.CreateLoad(Type::getInt32Ty(Builder.getContext()), KeyElemPtr);
-    KeyValue->setVolatile(true);
-
-    // Deobfuscate using the inverse of our obfuscation transformation
-    Value *Mod = Builder.CreateURem(StateValue, Builder.getInt32(7));
-    Value *Step1 = Builder.CreateSub(ObfuscatedID, Mod);
-    Value *Step2 = Builder.CreateXor(Step1, KeyValue);
-
-    // This isn't a perfect inverse, we're relying on the switch statement's
-    // case matching to work correctly In a real implementation, you'd need more
-    // precise transformations
-
-    // Keep updating the state to create a moving target
-    Value *NewState =
-        Builder.CreateXor(StateValue, Builder.getInt32(0x11335577));
-    StoreInst *StateStore = Builder.CreateStore(NewState, StateElemPtr);
-    StateStore->setVolatile(true);
-
-    return Step2;
+    // Simple load to avoid complex memory operations
+    return Builder.CreateLoad(Type::getInt32Ty(Builder.getContext()), BlockIDVar);
   }
 
   // Break CFG functionality: Add additional basic blocks and dummy conditional
@@ -267,27 +197,215 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
       return PreservedAnalyses::all();
     }
 
+    // Skip declarations and intrinsics
+    if (F.isDeclaration() || F.isIntrinsic()) {
+      return PreservedAnalyses::all();
+    }
+
+    // Skip variadic functions
+    if (F.isVarArg()) {
+      return PreservedAnalyses::all();
+    }
+
+    // Skip functions with special linkage types
+    if (F.hasAvailableExternallyLinkage() || F.hasLinkOnceLinkage()) {
+      return PreservedAnalyses::all();
+    }
+
+    // Skip main function to avoid issues with program initialization
+    if (F.getName() == "main") {
+      return PreservedAnalyses::all();
+    }
+
+    // Skip functions that are too large (register allocator might struggle)
+    if (F.size() > 30) {
+      return PreservedAnalyses::all();
+    }
+
+    // Count total instructions to avoid transforming very complex functions
+    unsigned InstCount = 0;
+    for (auto &BB : F) {
+      InstCount += BB.size();
+    }
+    if (InstCount > 200) {
+      return PreservedAnalyses::all();
+    }
+    
+    // Skip C++ special functions (constructors, destructors, operators)
+    if (F.getName().starts_with("_Z")) {
+      // Check for C++ special member functions in mangled names
+      StringRef MangledName = F.getName();
+      // Destructors contain D0Ev, D1Ev, D2Ev
+      // Constructors contain C1Ev, C2Ev
+      // Operators often have specific patterns
+      if (MangledName.contains("D0Ev") || MangledName.contains("D1Ev") || 
+          MangledName.contains("D2Ev") || MangledName.contains("C1Ev") ||
+          MangledName.contains("C2Ev") || MangledName.contains("dlEPv") ||
+          MangledName.contains("nwEm") || MangledName.contains("naEm")) {
+        return PreservedAnalyses::all();
+      }
+    }
+
+    // Analyze function patterns to skip problematic functions
+    bool hasComplexMemoryOps = false;
+    bool hasComplexStructAccess = false;
+    bool hasLoopWithMemoryOps = false;
+    bool hasInlineAsm = false;
+    bool hasIndirectCalls = false;
+    unsigned MemoryOpCount = 0;
+    unsigned GEPCount = 0;
+    unsigned CallCount = 0;
+    
+    // Check for loop patterns and memory complexity
+    for (auto &BB : F) {
+      if (BB.isEHPad() || BB.isLandingPad()) {
+        return PreservedAnalyses::all();
+      }
+      
+      // Skip functions with indirect branches
+      if (auto *Term = BB.getTerminator()) {
+        if (isa<IndirectBrInst>(Term) || isa<CallBrInst>(Term)) {
+          return PreservedAnalyses::all();
+        }
+      }
+      
+      // Skip functions with PHI nodes (our transformation doesn't handle them well)
+      if (!BB.phis().empty()) {
+        return PreservedAnalyses::all();
+      }
+      
+      // Check if this block is part of a loop
+      bool isInLoop = false;
+      for (auto *Pred : predecessors(&BB)) {
+        if (Pred == &BB || Pred->getTerminator()->getSuccessor(0) == &BB) {
+          isInLoop = true;
+          break;
+        }
+      }
+      
+      // Analyze instructions for complex patterns
+      for (auto &I : BB) {
+        // Check for memory operations
+        if (isa<LoadInst>(&I) || isa<StoreInst>(&I)) {
+          MemoryOpCount++;
+          
+          if (isInLoop) {
+            hasLoopWithMemoryOps = true;
+          }
+          
+          // Check for volatile or atomic operations
+          if (auto *LI = dyn_cast<LoadInst>(&I)) {
+            if (LI->isVolatile() || LI->isAtomic()) {
+              hasComplexMemoryOps = true;
+            }
+            // Check if loading from complex structure
+            if (auto *GEP = dyn_cast<GetElementPtrInst>(LI->getPointerOperand())) {
+              if (GEP->getNumIndices() > 2) {
+                hasComplexStructAccess = true;
+              }
+            }
+          }
+          if (auto *SI = dyn_cast<StoreInst>(&I)) {
+            if (SI->isVolatile() || SI->isAtomic()) {
+              hasComplexMemoryOps = true;
+            }
+            // Check if storing to complex structure
+            if (auto *GEP = dyn_cast<GetElementPtrInst>(SI->getPointerOperand())) {
+              if (GEP->getNumIndices() > 2) {
+                hasComplexStructAccess = true;
+              }
+            }
+          }
+        }
+        
+        // Count GEP instructions (complex pointer arithmetic)
+        if (isa<GetElementPtrInst>(&I)) {
+          GEPCount++;
+        }
+        
+        // Check for inline assembly
+        if (isa<InlineAsm>(&I)) {
+          hasInlineAsm = true;
+        }
+        
+        // Check for calls
+        if (auto *CI = dyn_cast<CallInst>(&I)) {
+          CallCount++;
+          
+          // Check for indirect calls
+          if (!CI->getCalledFunction()) {
+            hasIndirectCalls = true;
+          }
+          
+          // Check for memory intrinsics
+          if (CI->getCalledFunction()) {
+            StringRef Name = CI->getCalledFunction()->getName();
+            if (Name.starts_with("llvm.memcpy") || Name.starts_with("llvm.memmove") ||
+                Name.starts_with("llvm.memset") || Name.starts_with("llvm.lifetime") ||
+                Name.starts_with("llvm.invariant") || Name.starts_with("llvm.assume")) {
+              hasComplexMemoryOps = true;
+            }
+            // Check for allocation functions
+            if (Name == "malloc" || Name == "calloc" || Name == "realloc" || 
+                Name == "free" || Name == "_Znwm" || Name == "_Znam" || 
+                Name == "_ZdlPv" || Name == "_ZdaPv") {
+              hasComplexMemoryOps = true;
+            }
+          }
+        }
+        
+        // Check for invoke instructions
+        if (isa<InvokeInst>(&I)) {
+          return PreservedAnalyses::all();
+        }
+      }
+    }
+    
+    // Skip functions with problematic patterns
+    if (hasComplexMemoryOps || hasInlineAsm || hasIndirectCalls ||
+        hasComplexStructAccess || hasLoopWithMemoryOps ||
+        MemoryOpCount > 50 || GEPCount > 30 || CallCount > 20) {
+      return PreservedAnalyses::all();
+    }
+
     Module *M = F.getParent();
 
     llvm::WithColor::note() << "Tainting control flow: " << F.getName() << '\n';
 
     // First, apply control flow breaking to add additional complexity
-    bool cfgBroken = breakControlFlow(F);
+    // DISABLED: This can cause issues with register allocation in complex functions
+    bool cfgBroken = false; // breakControlFlow(F);
 
     // Create global state that will help us make harder-to-optimize code
-    GlobalVariable *StateVar = createGlobalState(M);
+    GlobalVariable *StateVar = createGlobalState(M, F);
 
-    // Only collect blocks with exactly one successor
+    // Only collect blocks with exactly one successor that are safe to transform
     SmallVector<BasicBlock *, 8> Blocks;
     for (auto &BB : F) {
       if (BB.getTerminator() && BB.getTerminator()->getNumSuccessors() == 1 &&
           &BB != &F.getEntryBlock()) {
-        Blocks.push_back(&BB);
+        // Skip blocks that might be loop headers or have phi nodes in successors
+        BasicBlock *Succ = BB.getTerminator()->getSuccessor(0);
+        bool hasPhiUsers = false;
+        for (auto &SuccPhi : Succ->phis()) {
+          if (SuccPhi.getNumIncomingValues() > 1) {
+            hasPhiUsers = true;
+            break;
+          }
+        }
+        if (!hasPhiUsers) {
+          Blocks.push_back(&BB);
+        }
       }
     }
 
     if (Blocks.empty()) {
       return PreservedAnalyses::all();
+    }
+
+    // Limit the number of blocks we transform to avoid overwhelming the register allocator
+    if (Blocks.size() > 20) {
+      Blocks.resize(20);
     }
 
     BasicBlock *Entry = &F.getEntryBlock();
@@ -296,35 +414,48 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     IRBuilder<> EntryBuilder(Entry->getFirstNonPHI());
     AllocaInst *BlockIDVar = EntryBuilder.CreateAlloca(
         Type::getInt32Ty(F.getContext()), nullptr, "blockID");
-
-    // Initialize with a complex calculation
+    
+    // Simple initialization to avoid complex memory operations
     Value *InitValue = EntryBuilder.getInt32(0);
-    Value *IdxList[2] = {ConstantInt::get(Type::getInt32Ty(F.getContext()), 0),
-                         ConstantInt::get(Type::getInt32Ty(F.getContext()), 3)};
-    Value *StateElemPtr = EntryBuilder.CreateInBoundsGEP(
-        StateVar->getValueType(), StateVar, IdxList, "state_elem_ptr");
-    LoadInst *StateInit =
-        EntryBuilder.CreateLoad(Type::getInt32Ty(F.getContext()), StateElemPtr);
-    StateInit->setVolatile(true);
-    Value *ObfInit = EntryBuilder.CreateXor(InitValue, StateInit);
-    StoreInst *InitStore = EntryBuilder.CreateStore(ObfInit, BlockIDVar);
-    InitStore->setVolatile(true);
+    EntryBuilder.CreateStore(InitValue, BlockIDVar);
 
     // Create dispatcher block after the entry block
     BasicBlock *Dispatcher = BasicBlock::Create(F.getContext(), "dispatcher",
                                                 &F, Entry->getNextNode());
+    
+    // Save the original entry successor before modifying
+    BasicBlock *OriginalEntrySucc = nullptr;
+    if (Entry->getTerminator()) {
+      if (Entry->getTerminator()->getNumSuccessors() > 0) {
+        OriginalEntrySucc = Entry->getTerminator()->getSuccessor(0);
+      }
+      Entry->getTerminator()->eraseFromParent();
+    }
+    
+    // Connect entry block to dispatcher
+    IRBuilder<> EntryTermBuilder(Entry);
+    EntryTermBuilder.CreateBr(Dispatcher);
+    
     IRBuilder<> DispBuilder(Dispatcher);
 
     // Load the blockID using our complex scheme
     Value *SwitchVal = loadAdvancedBlockID(DispBuilder, BlockIDVar, StateVar);
 
-    // Create a switch statement
+    // Create a switch statement - use original entry successor as default if available
+    BasicBlock *DefaultDest = OriginalEntrySucc ? OriginalEntrySucc : Entry;
     SwitchInst *SwInst =
-        DispBuilder.CreateSwitch(SwitchVal, Entry, Blocks.size() + 1);
+        DispBuilder.CreateSwitch(SwitchVal, DefaultDest, Blocks.size() + 1);
 
     // Assign unique IDs to each block and add cases to the switch
     int NextID = 1;
     SmallDenseMap<BasicBlock *, int> BlockToID;
+
+    // If we have an original entry successor, assign it ID 0
+    if (OriginalEntrySucc && OriginalEntrySucc != Entry) {
+      BlockToID[OriginalEntrySucc] = 0;
+      SwInst->addCase(
+          ConstantInt::get(Type::getInt32Ty(F.getContext()), 0), OriginalEntrySucc);
+    }
 
     for (auto *BB : Blocks) {
       int ThisID = NextID++;
@@ -333,10 +464,23 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
           ConstantInt::get(Type::getInt32Ty(F.getContext()), ThisID), BB);
     }
 
+    // First, we need to update PHI nodes before modifying terminators
+    // Map from old block to new block for PHI updates
+    DenseMap<BasicBlock*, BasicBlock*> OldToNewSuccessor;
+    
     // Now modify each block's terminator
     for (auto *BB : Blocks) {
       auto *Term = BB->getTerminator();
       BasicBlock *Succ = Term->getSuccessor(0);
+
+      // Before modifying, update any PHI nodes in the successor
+      for (auto &Phi : Succ->phis()) {
+        // The PHI will now receive values from the dispatcher instead of BB
+        int Idx = Phi.getBasicBlockIndex(BB);
+        if (Idx >= 0) {
+          Phi.setIncomingBlock(Idx, Dispatcher);
+        }
+      }
 
       IRBuilder<> Builder(Term);
 
@@ -356,51 +500,31 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
             Succ);
       }
 
-      // Add an opaque predicate that makes a dead branch to confuse the
-      // optimizer
-      Value *OpaqueCond = createAdvancedOpaquePredicate(
-          Builder, Builder.getInt32(NextBlockID), StateVar);
-
-      // Create a bogus block that will never be taken to increase the apparent
-      // complexity
-      BasicBlock *BogusBlock =
-          BasicBlock::Create(F.getContext(), BB->getName() + ".bogus", &F);
-      IRBuilder<> BogusBuilder(BogusBlock);
-
-      // Make the bogus block look important by doing complex operations
-      Value *Bogus1 =
-          BogusBuilder.CreateAlloca(Type::getInt32Ty(F.getContext()));
-      BogusBuilder.CreateStore(BogusBuilder.getInt32(0xDEADBEEF), Bogus1);
-      LoadInst *BogusLoad =
-          BogusBuilder.CreateLoad(Type::getInt32Ty(F.getContext()), Bogus1);
-      BogusLoad->setVolatile(true);
-      BogusBuilder.CreateBr(Dispatcher); // Loop back to dispatcher
-
       // Store the next block ID using our complex obfuscation
       storeAdvancedBlockID(Builder, BlockIDVar, NextBlockID, StateVar);
 
-      // Create conditional branch that will always go to dispatcher, but is
-      // hard to prove This will create a more complex CFG that's harder to
-      // analyze
-      Builder.CreateCondBr(OpaqueCond, BogusBlock, Dispatcher);
+      // For now, skip the bogus block creation to simplify and avoid issues
+      // Just branch to dispatcher
+      Builder.CreateBr(Dispatcher);
 
       // Remove the original terminator
       Term->eraseFromParent();
     }
 
-    // We've modified the CFG, so preserve nothing
-    return (cfgBroken ? PreservedAnalyses::none() : PreservedAnalyses::none());
+    // We've modified the CFG significantly, so we need to invalidate most analyses
+    return PreservedAnalyses::none();
   }
 };
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    // Register at the END of the optimization pipeline
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM,
-                                           OptimizationLevel Level) {
-      MPM.addPass(createModuleToFunctionPassAdaptor(ControlFlowTaintPass()));
-      return true;
-    });
+    // Register as a late function simplification pass instead of at the very end
+    // This avoids conflicts with loop canonicalization
+    PB.registerPipelineEarlySimplificationEPCallback(
+        [&](ModulePassManager &MPM, auto) {
+          MPM.addPass(createModuleToFunctionPassAdaptor(ControlFlowTaintPass()));
+          return true;
+        });
   };
 
   return {LLVM_PLUGIN_API_VERSION, "kovid-control-flow-taint", "0.0.1",

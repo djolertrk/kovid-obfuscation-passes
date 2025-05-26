@@ -28,6 +28,7 @@
 // these dummy operations from being optimized away.
 //
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
@@ -50,50 +51,83 @@ namespace {
 // This, for now, implements "Arithmetic code obfuscation" only.
 struct InstructionObfuscationPass : public PassInfoMixin<InstructionObfuscationPass> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
-    // Process each basic block in the function.
+    // Skip declarations
+    if (F.isDeclaration()) {
+      return PreservedAnalyses::all();
+    }
+
+    // Create a dummy alloca in the entry block to prevent constant folding
+    BasicBlock &EntryBB = F.getEntryBlock();
+    LLVMContext &Ctx = F.getContext();
+    Type *Int32Ty = Type::getInt32Ty(Ctx);
+    
+    // Map to store allocas for different types
+    DenseMap<Type*, AllocaInst*> TypeToAlloca;
+    
+    // First, collect all add instructions from all blocks
+    SmallVector<Instruction *, 32> AllAddInsts;
     for (BasicBlock &BB : F) {
-      // Collect add instructions in this basic block.
-      SmallVector<Instruction *, 8> AddInsts;
       for (Instruction &I : BB) {
         if (auto *BO = dyn_cast<BinaryOperator>(&I)) {
-          if (BO->getOpcode() == Instruction::Add)
-            AddInsts.push_back(&I);
+          if (BO->getOpcode() == Instruction::Add && BO->getType()->isIntegerTy())
+            AllAddInsts.push_back(&I);
         }
       }
-
-      // Process each add instruction.
-      for (Instruction *I : AddInsts) {
+    }
+    
+    // If no add instructions, nothing to do
+    if (AllAddInsts.empty()) {
+      return PreservedAnalyses::all();
+    }
+    
+    // Create all needed allocas upfront in the entry block
+    // This avoids iterator invalidation issues
+    IRBuilder<> EntryBuilder(&EntryBB, EntryBB.getFirstInsertionPt());
+    for (Instruction *I : AllAddInsts) {
+      Type *AddType = I->getType();
+      if (TypeToAlloca.find(AddType) == TypeToAlloca.end()) {
+        AllocaInst *NewAlloca = EntryBuilder.CreateAlloca(AddType, nullptr, "dummyForObfTyped");
+        TypeToAlloca[AddType] = NewAlloca;
+      }
+    }
+    
+    // Process each add instruction.
+    for (Instruction *I : AllAddInsts) {
         llvm::WithColor::note() << "Complicating: " << *I << '\n';
 
         IRBuilder<> Builder(I);
-        LLVMContext &Ctx = F.getContext();
-        Type *Int32Ty = Type::getInt32Ty(Ctx);
+        
+        // Get the type of the add instruction
+        Type *AddType = I->getType();
+        if (!AddType->isIntegerTy()) {
+          continue; // Skip non-integer adds
+        }
 
-        // To prevent constant folding, use a volatile load from an alloca.
-        // Assume there is an alloca inserted at the beginning of the function
-        // that holds 0. For our purposes, we create one here.
-        AllocaInst *dummyAlloca =
-            Builder.CreateAlloca(Int32Ty, nullptr, "dummyForObf");
-        // Store 0 into it, mark the store as volatile.
-        StoreInst *store0 =
-            Builder.CreateStore(ConstantInt::get(Int32Ty, 0), dummyAlloca);
+        // Create constants of the appropriate type
+        Value *Zero = ConstantInt::get(AddType, 0);
+        Value *FortyTwo = ConstantInt::get(AddType, 42);
+
+        // Get the pre-created alloca for this type
+        AllocaInst *AllocaToUse = TypeToAlloca[AddType];
+        
+        StoreInst *store0 = Builder.CreateStore(Zero, AllocaToUse);
         store0->setVolatile(true);
 
-        // Load from dummyAlloca (volatile, so it won't be folded).
+        // Load from alloca (volatile, so it won't be folded).
         LoadInst *dummyLoad =
-            Builder.CreateLoad(Int32Ty, dummyAlloca, "dummy.load");
+            Builder.CreateLoad(AddType, AllocaToUse, "dummy.load");
         dummyLoad->setVolatile(true);
 
         // Now, build the dummy arithmetic sequence:
-        // dummy = add i32 (dummyLoad, 42)
+        // dummy = add (dummyLoad, 42)
         Instruction *dummy = cast<Instruction>(Builder.CreateAdd(
-            dummyLoad, ConstantInt::get(Int32Ty, 42), "dummy"));
+            dummyLoad, FortyTwo, "dummy"));
         dummy->setMetadata("obf", MDNode::get(Ctx, MDString::get(Ctx, "obf")));
 
-        // temp = sub i32 (dummy, 42)  ; This should yield the original
+        // temp = sub (dummy, 42)  ; This should yield the original
         // dummyLoad value (0)
         Instruction *temp = cast<Instruction>(
-            Builder.CreateSub(dummy, ConstantInt::get(Int32Ty, 42), "temp"));
+            Builder.CreateSub(dummy, FortyTwo, "temp"));
         temp->setMetadata("obf", MDNode::get(Ctx, MDString::get(Ctx, "obf")));
 
         // Now, replace:  %result = add i32 %a, %b
@@ -113,7 +147,6 @@ struct InstructionObfuscationPass : public PassInfoMixin<InstructionObfuscationP
         // Replace all uses of the original add with the newAdd and remove it.
         I->replaceAllUsesWith(newAdd);
         I->eraseFromParent();
-      }
     }
     return PreservedAnalyses::none();
   }

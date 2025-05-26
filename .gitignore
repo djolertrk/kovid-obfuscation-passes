@@ -1,1 +1,5 @@
 build
+benchmarks/builds/
+benchmarks/llvm-test-suite/
+benchmarks/results/
+benchmarks/runtime_results/
