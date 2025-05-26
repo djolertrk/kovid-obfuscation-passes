@@ -159,6 +159,9 @@ config.substitutions.append(('%build_lib_dir', os.path.join(plugin_lib_dir, ''))
 if getattr(config, 'native_tests', '1') == '1':
     config.available_features.add('NATIVE_TESTS')
 
+if getattr(config, 'is_gcc_enabled', '1') == '1':
+    config.available_features.add('GCC_ENABLED')
+
 # Add shell feature
 config.available_features.add('shell')
 

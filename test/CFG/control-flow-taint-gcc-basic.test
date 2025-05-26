@@ -1,3 +1,5 @@
+# REQUIRES: GCC_ENABLED
+
 # RUN: gcc-12 -O2 -fplugin=%build_lib_dir/libKoviDControlFlowTaintGCCPlugin.so -S %S/Inputs/control-flow-taint-basic.c -o %t
 # RUN: %FileCheck %s --input-file=%t
 

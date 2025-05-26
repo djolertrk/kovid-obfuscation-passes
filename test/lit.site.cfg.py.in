@@ -17,6 +17,7 @@ config.native_tests = "@NATIVE_TESTS@"
 config.llvm_version_major = "@LLVM_VERSION_MAJOR@"
 config.llvm_version_minor = "@LLVM_VERSION_MINOR@"
 config.target_triple = "@TARGET_TRIPLE@"
+config.is_gcc_enabled = "@KOP_BUILD_GCC_PLUGINS@"
 
 # Let the main config do the real work.
 lit_config.load_config(config, "@CMAKE_CURRENT_SOURCE_DIR@/lit.cfg.py")

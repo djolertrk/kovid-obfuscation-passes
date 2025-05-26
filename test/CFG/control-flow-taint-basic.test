@@ -1,3 +1,5 @@
+# REQUIRES: GCC_ENABLED
+
 # RUN: %clang -O1 -fpass-plugin=%control_flow_taint_plugin -S -emit-llvm %S/Inputs/control-flow-taint-basic.c -o %t
 # RUN: %FileCheck %s --input-file=%t
 
