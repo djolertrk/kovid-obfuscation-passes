@@ -5,14 +5,14 @@
 // Control-Flow Taint Obfuscation Pass for LLVM
 // ---------------------------------------------
 //
-// This LLVM pass implements advanced control flow obfuscation techniques
-// designed to resist aggressive optimization by using:
-// 1. Advanced opaque predicates using a mix of global state and complex
-// calculations
-// 2. Runtime-dependent values to prevent compile-time evaluation
-// 3. Memory aliasing and volatiles to prevent certain optimizations
-// 4. Indirect control flow through function pointers
-// 5. Various control flow complication mechanisms
+// This LLVM pass merges CFFlattening and BreakCFG techniques to implement
+// advanced control flow obfuscation designed to resist aggressive optimization by using:
+// 1. Control flow flattening with dispatcher blocks and switch statements
+// 2. Breaking control flow with dummy blocks and opaque predicates
+// 3. Advanced opaque predicates using global state and complex calculations
+// 4. Runtime-dependent values to prevent compile-time evaluation
+// 5. Memory aliasing and volatiles to prevent certain optimizations
+// 6. Various control flow complication mechanisms
 //
 
 #include "llvm/IR/BasicBlock.h"
@@ -62,7 +62,22 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     return StateVar;
   }
 
-  // Create an opaque predicate that's hard to evaluate at compile time
+  // Create an opaque predicate that the optimizer can't easily evaluate
+  // Returns a Value that is actually false at runtime but appears complex
+  Value *createOpaquePredicate(IRBuilder<> &builder) {
+    // Create a complex expression that evaluates to false but is hard to prove
+    // statically Example: (x * x) % 2 == 1 where x = 2 will always be 0, thus
+    // false
+    Value *X = builder.getInt32(2); // A constant we know is even
+    Value *Squared = builder.CreateMul(X, X);
+    Value *Mod = builder.CreateURem(Squared, builder.getInt32(2));
+    Value *Compare = builder.CreateICmpEQ(Mod, builder.getInt32(1));
+
+    return Compare; // Always false at runtime (4 % 2 = 0, which is not equal to
+                    // 1)
+  }
+
+  // Create an advanced opaque predicate that's hard to evaluate at compile time
   Value *createAdvancedOpaquePredicate(IRBuilder<> &Builder, Value *InputVal,
                                        GlobalVariable *StateVar) {
     // Get a pointer to a specific element in our state array
@@ -185,21 +200,6 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     StateStore->setVolatile(true);
 
     return Step2;
-  }
-
-  // Create an opaque predicate that the optimizer can't easily evaluate
-  // Returns a Value that is actually false at runtime but appears complex
-  Value *createOpaquePredicate(IRBuilder<> &builder) {
-    // Create a complex expression that evaluates to false but is hard to prove
-    // statically Example: (x * x) % 2 == 1 where x = 2 will always be 0, thus
-    // false
-    Value *X = builder.getInt32(2); // A constant we know is even
-    Value *Squared = builder.CreateMul(X, X);
-    Value *Mod = builder.CreateURem(Squared, builder.getInt32(2));
-    Value *Compare = builder.CreateICmpEQ(Mod, builder.getInt32(1));
-
-    return Compare; // Always false at runtime (4 % 2 = 0, which is not equal to
-                    // 1)
   }
 
   // Break CFG functionality: Add additional basic blocks and dummy conditional

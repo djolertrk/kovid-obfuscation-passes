@@ -73,8 +73,7 @@ foreach(target
     libKoviDRemoveMetadataAndUnusedCodeLLVMPlugin
     libKoviDStringEncryptionLLVMPlugin
     libKoviDInstructionObfuscationPassLLVMPlugin
-    libKoviDBreakCFGLLVMPlugin
-    libKoviDCFFlatteningLLVMPlugin)
+    ControlFlowTaintPass)
   if(TARGET ${target})
     list(APPEND KOVID_TEST_DEPENDS ${target})
     message(STATUS "Added test dependency: ${target}")
