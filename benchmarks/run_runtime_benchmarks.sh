@@ -19,7 +19,7 @@ if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
 fi
 
 # Number of runs for each benchmark
-NUM_RUNS=3
+NUM_RUNS=20
 
 echo "=== KoviD Obfuscation Passes Runtime Benchmark Runner ==="
 echo "Results will be saved to: $RESULTS_DIR"
