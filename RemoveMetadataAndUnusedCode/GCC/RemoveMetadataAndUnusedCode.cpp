@@ -14,6 +14,9 @@
 #include <cstring>
 #include <vector>
 
+// Disable implicit inlining for this plugin
+// #pragma GCC optimize ("no-inline")
+
 // GCC plugin headers
 #include "gcc-plugin.h"
 #include "plugin-version.h"
@@ -88,58 +91,83 @@ static void disable_global_debug_info() {
 // -----------------------------------------------------------------------------
 
 static void remove_unused_local_functions(void *, void *) {
+#ifdef DEBUG_OUTPUT
   fprintf(
       stderr,
       "[RemoveMetadataUnusedCode] Checking for unused local functions...\n");
+#endif
 
-  // We'll gather the cgraph_node + symtab_node pairs to remove
-  std::vector<std::pair<cgraph_node *, symtab_node *>> to_remove;
+  // Use a fixed-size array instead of std::vector to avoid ABI issues
+  const int MAX_REMOVABLE_FUNCTIONS = 1024;
+  struct RemovePair {
+    cgraph_node *cnode;
+  };
+  RemovePair to_remove[MAX_REMOVABLE_FUNCTIONS];
+  int to_remove_count = 0;
 
-  // Iterate over all symtab nodes
-  for (symtab_node *snode = symtab->nodes; snode; snode = snode->next) {
-    // 1) Check if 'decl' is a function (FUNCTION_DECL)
-    if (!snode->decl || TREE_CODE(snode->decl) != FUNCTION_DECL)
-      continue;
+  // Protect the whole function with try-catch to prevent crashes
+  try {
+    // First pass: collect nodes that need to be removed
+    // Use cgraph_node_for_each_function to safely iterate
+    cgraph_node *node;
+    FOR_EACH_FUNCTION(node) {
+      // Skip invalid nodes
+      if (!node || !node->decl)
+        continue;
 
-    // 2) Get the corresponding cgraph_node from this decl
-    cgraph_node *cnode = cgraph_node::get(snode->decl);
-    if (!cnode)
-      continue;
+      // Only consider local function definitions that can be discarded
+      // (i.e., not externally visible or required).
+      if (!node->definition || !node->can_be_discarded_p())
+        continue;
 
-    // Only consider local function definitions that can be discarded
-    // (i.e., not externally visible or required).
-    if (!cnode->definition || !cnode->can_be_discarded_p())
-      continue;
+      // "No callers" => node->callers == nullptr
+      bool no_callers = (node->callers == nullptr);
 
-    // "No callers" => cnode->callers == nullptr
-    bool no_callers = (cnode->callers == nullptr);
+      // "Not address-taken"
+      bool not_address_taken = !node->address_taken;
 
-    // "Not address-taken"
-    bool not_address_taken = !cnode->address_taken;
+      // Additional safety checks
+      if (DECL_EXTERNAL(node->decl) || TREE_PUBLIC(node->decl))
+        continue;
 
-    // If both conditions hold, mark it for removal
-    if (no_callers && not_address_taken)
-      to_remove.emplace_back(cnode, snode);
-  }
+      // If both conditions hold, mark it for removal
+      if (no_callers && not_address_taken && to_remove_count < MAX_REMOVABLE_FUNCTIONS) {
+        to_remove[to_remove_count].cnode = node;
+        to_remove_count++;
+      }
+    }
 
-  // Actually remove them
-  for (auto &pair : to_remove) {
-    cgraph_node *cnode = pair.first;
-    symtab_node *snode = pair.second;
+    // Actually remove them (only from the call graph)
+    for (int i = 0; i < to_remove_count; i++) {
+      cgraph_node *node = to_remove[i].cnode;
+      
+      // Skip invalid nodes
+      if (!node)
+        continue;
 
-    // Print out function name
-    const char *name = nullptr;
-    if (cnode->decl)
-      name = get_name(cnode->decl);
+      // Print out function name in debug mode
+#ifdef DEBUG_OUTPUT
+      const char *name = nullptr;
+      if (node->decl)
+        name = get_name(node->decl);
+      fprintf(stderr, "  Removing unused function: %s\n",
+              name ? name : "(unknown)");
+#endif
 
-    fprintf(stderr, "  Removing unused function: %s\n",
-            name ? name : "(unknown)");
-
-    // 1) Remove from the call graph
-    cnode->remove();
-
-    // 2) Remove from the global symbol table
-    snode->remove();
+      try {
+        // Only remove from the call graph
+        node->remove();
+      } catch (...) {
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "  Error removing function\n");
+#endif
+      }
+    }
+  } catch (...) {
+    // Catch any exceptions to prevent plugin crashes
+#ifdef DEBUG_OUTPUT
+    fprintf(stderr, "Exception caught in remove_unused_local_functions\n");
+#endif
   }
 }
 
@@ -151,7 +179,9 @@ int plugin_init(struct plugin_name_args *plugin_info,
                 struct plugin_gcc_version *version) {
   // 0) Basic version check
   if (!plugin_default_version_check(version, &gcc_version)) {
-    fprintf(stderr, "RemoveMetadataUnusedCode: Incompatible GCC version\n");
+  #ifdef DEBUG_OUTPUT
+  fprintf(stderr, "RemoveMetadataUnusedCode: Incompatible GCC version\n");
+#endif
     return 1;
   }
 
@@ -179,6 +209,8 @@ int plugin_init(struct plugin_name_args *plugin_info,
   register_callback(plugin_info->base_name, PLUGIN_FINISH_UNIT,
                     remove_unused_local_functions, nullptr);
 
+#ifdef DEBUG_OUTPUT
   fprintf(stderr, "KoviD RemoveMetadataUnusedCode Plugin loaded.\n");
+#endif
   return 0;
 }

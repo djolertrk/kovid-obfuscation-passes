@@ -68,14 +68,56 @@ run_benchmark() {
     echo "  Results saved to: $result_file"
 }
 
-# List of passes to benchmark
-declare -a PASSES=(
-    "baseline"
-    "rename"
-    "dummy"
-    "instruction"
-    "cft"
-)
+# Add support for compiler type parameter
+COMPILER_TYPE="clang" # Default to clang (can be "gcc" or "clang")
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --compiler=*)
+            COMPILER_TYPE="${1#*=}"
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [--compiler=clang|gcc]"
+            echo "  --compiler=TYPE    Specify compiler type (clang or gcc)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+echo "Using compiler type: $COMPILER_TYPE"
+
+# List of passes to benchmark - ensure it matches what's in setup_benchmarks.sh
+if [ "$COMPILER_TYPE" = "clang" ]; then
+    declare -a PASSES=(
+        "baseline"
+        "rename"
+        "dummy"
+        "instruction"
+        "cft"
+        "metadata"
+        "string"
+    )
+elif [ "$COMPILER_TYPE" = "gcc" ]; then
+    declare -a PASSES=(
+        "baseline"
+        "rename"
+        "dummy"
+        "instruction"
+        "cft"
+        "metadata"
+        "string"
+    )
+else
+    echo "Error: Unknown compiler type: $COMPILER_TYPE. Use 'clang' or 'gcc'."
+    exit 1
+fi
 
 # Run benchmarks for each pass
 for pass in "${PASSES[@]}"; do

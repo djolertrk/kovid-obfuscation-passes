@@ -21,9 +21,33 @@ fi
 # Number of runs for each benchmark
 NUM_RUNS=20
 
+# Add support for compiler type parameter
+COMPILER_TYPE="clang" # Default to clang (can be "gcc" or "clang")
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --compiler=*)
+            COMPILER_TYPE="${1#*=}"
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [--compiler=clang|gcc]"
+            echo "  --compiler=TYPE    Specify compiler type (clang or gcc)"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 echo "=== KoviD Obfuscation Passes Runtime Benchmark Runner ==="
 echo "Results will be saved to: $RESULTS_DIR"
 echo "Number of runs per benchmark: $NUM_RUNS"
+echo "Using compiler type: $COMPILER_TYPE"
 
 # List of benchmarks to run
 declare -a BENCHMARKS=(
@@ -76,14 +100,31 @@ run_single_benchmark() {
     fi
 }
 
-# Run benchmarks for each pass
-declare -a PASSES=(
-    "baseline"
-    "rename"
-    "dummy"
-    "instruction"
-    "cft"
-)
+# List of passes to benchmark - ensure it matches what's in setup_benchmarks.sh
+if [ "$COMPILER_TYPE" = "clang" ]; then
+    declare -a PASSES=(
+        "baseline"
+        "rename"
+        "dummy"
+        "instruction"
+        "cft"
+        "metadata"
+        "string"
+    )
+elif [ "$COMPILER_TYPE" = "gcc" ]; then
+    declare -a PASSES=(
+        "baseline"
+        "rename"
+        "dummy"
+        "instruction"
+        "cft"
+        "metadata"
+        "string"
+    )
+else
+    echo "Error: Unknown compiler type: $COMPILER_TYPE. Use 'clang' or 'gcc'."
+    exit 1
+fi
 
 for pass in "${PASSES[@]}"; do
     echo "=== Running benchmarks for $pass ==="
@@ -147,3 +188,7 @@ echo "Results are in: $RESULTS_DIR"
 echo ""
 echo "To compare runtime performance, run:"
 echo "  python3 compare_runtime_results.py $RESULTS_DIR/*_runtime_${TIMESTAMP}.json --latex"
+echo ""
+echo "Note: Results are organized by compiler type ($COMPILER_TYPE)"
+echo "For different compiler benchmarks:"
+echo "  ./run_runtime_benchmarks.sh --compiler=[clang|gcc]"

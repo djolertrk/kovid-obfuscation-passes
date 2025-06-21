@@ -46,7 +46,6 @@
 using namespace llvm;
 
 struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
-
   // Simplified opaque predicate - always returns false
   Value *createSimpleOpaquePredicate(IRBuilder<> &builder) {
     // (x & 1) == 2 is always false (no odd number equals 2)
@@ -64,6 +63,7 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
       return PreservedAnalyses::all();
     }
 
+    // TODO: Improve this by more testing.
     // Skip large functions
     if (F.size() > 20) {
       return PreservedAnalyses::all();
@@ -75,7 +75,7 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
       if (BB.isEHPad() || BB.isLandingPad()) {
         return PreservedAnalyses::all();
       }
-      
+
       // Skip functions with indirect branches
       if (auto *Term = BB.getTerminator()) {
         if (isa<IndirectBrInst>(Term) || isa<CallBrInst>(Term) || 
@@ -83,13 +83,13 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
             isa<CleanupReturnInst>(Term) || isa<CatchReturnInst>(Term)) {
           return PreservedAnalyses::all();
         }
-        
+
         // Skip functions with switch statements
         if (isa<SwitchInst>(Term)) {
           return PreservedAnalyses::all();
         }
       }
-      
+
       // Skip functions with PHI nodes - our transformation doesn't handle them well
       if (!BB.phis().empty()) {
         return PreservedAnalyses::all();
@@ -101,36 +101,36 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     // Collect only simple blocks to transform
     SmallVector<BasicBlock *, 8> BlocksToTransform;
     BasicBlock *Entry = &F.getEntryBlock();
-    
+
     for (auto &BB : F) {
       // Skip entry block and blocks with multiple predecessors
       if (&BB == Entry || pred_size(&BB) > 1) {
         continue;
       }
-      
+
       // Only handle blocks with unconditional branches
       auto *Term = dyn_cast<BranchInst>(BB.getTerminator());
       if (!Term || Term->isConditional()) {
         continue;
       }
-      
+
       BasicBlock *Succ = Term->getSuccessor(0);
-      
+
       // Skip if successor has PHI nodes
       if (!Succ->phis().empty()) {
         continue;
       }
-      
+
       // Skip if successor has multiple predecessors
       if (pred_size(Succ) > 1) {
         continue;
       }
-      
+
       // Skip if this would create a cycle
       if (Succ == Entry || Succ == &BB) {
         continue;
       }
-      
+
       BlocksToTransform.push_back(&BB);
     }
 
@@ -161,7 +161,7 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
         OriginalEntrySucc = EntryTerm->getSuccessor(0);
       }
     }
-    
+
     // Connect entry to dispatcher
     if (Entry->getTerminator()) {
       Entry->getTerminator()->eraseFromParent();
@@ -173,20 +173,20 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     IRBuilder<> DispBuilder(Dispatcher);
     LoadInst *SwitchVal = DispBuilder.CreateLoad(
         Type::getInt32Ty(F.getContext()), BlockIDVar, "switchval");
-    
+
     // Create default destination - use function exit or create a trap block
     BasicBlock *DefaultDest = BasicBlock::Create(
         F.getContext(), "default.trap", &F);
     IRBuilder<> TrapBuilder(DefaultDest);
     TrapBuilder.CreateUnreachable();
-    
+
     SwitchInst *SwInst = DispBuilder.CreateSwitch(
         SwitchVal, DefaultDest, BlocksToTransform.size() + 2);
 
     // Map blocks to IDs
     DenseMap<BasicBlock *, int> BlockToID;
     int NextID = 0;
-    
+  
     // Add original entry successor if it exists
     if (OriginalEntrySucc) {
       BlockToID[OriginalEntrySucc] = NextID;
@@ -207,10 +207,11 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
     // Transform each block
     for (auto *BB : BlocksToTransform) {
       auto *Term = BB->getTerminator();
-      if (!Term) continue;
-      
+      if (!Term)
+        continue;
+  
       BasicBlock *Succ = Term->getSuccessor(0);
-      
+
       // Determine next block ID
       int NextBlockID;
       if (BlockToID.count(Succ)) {
@@ -223,7 +224,7 @@ struct ControlFlowTaintPass : public PassInfoMixin<ControlFlowTaintPass> {
             ConstantInt::get(Type::getInt32Ty(F.getContext()), NextBlockID),
             Succ);
       }
-      
+
       // Replace terminator
       IRBuilder<> Builder(Term);
       Builder.CreateStore(Builder.getInt32(NextBlockID), BlockIDVar);
