@@ -1,0 +1,11 @@
+# REQUIRES: shell
+# RUN: %clang -O2 -fpass-plugin=%rename_plugin -c %S/Inputs/rename-basic.c -o %t
+# RUN: nm %t | grep -v "U " | %FileCheck %s
+
+// Test that the RenameCode pass successfully renames functions with local linkage
+// Compile with: clang -O2 -fpass-plugin=libKoviDRenameCodeLLVMPlugin.so -c Inputs/rename-basic.c
+
+// Looking for encrypted function names instead of original ones
+// CHECK-NOT: t foo
+// CHECK-NOT: t bar
+// CHECK: T {{.*}}main

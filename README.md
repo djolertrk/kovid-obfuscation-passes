@@ -27,6 +27,10 @@ Transforms common arithmetic operations into equivalent but more complex sequenc
 
 Encrypts plaintext string literals in the binary so that sensitive or informative strings are hidden. This prevents attackers from easily gleaning information by simply reading the binary’s embedded strings.
 
+6. ***Control Flow Taint***
+
+Implements advanced control flow obfuscation by combining multiple techniques: control flow breaking with opaque predicates, control flow flattening with dispatcher blocks, and state variable injection. This comprehensive approach creates layered protection that is significantly more resistant to automated deobfuscation tools.
+
 ## Install deps
 
 ```
@@ -40,6 +44,13 @@ sudo apt-get install -y ninja-build
 
 # GCC Plugin Dev Package
 $ sudo apt-get install gcc-12-plugin-dev
+$ sudo apt-get install g++-12
+
+# lit
+$ pip3 install lit
+$ sudo ln -s ~/.local/bin/lit /usr/bin/llvm-lit
+$ which llvm-lit
+/usr/bin/llvm-lit
 ```
 
 ## Build
@@ -214,6 +225,15 @@ But, for example, if you want to debug code that was processed with `libKoviDStr
 ## Users
 
 Some of the plugins are being used for obfuscated build of an awesome, open-source rootkit - [KoviD](https://github.com/carloslack/KoviD).
+
+## Run tests
+
+Please note that we need `lit` and `FileCheck` in `PATH`, also add `-DENABLE_TESTS=ON` during build configuration.
+
+```bash
+export PATH=/path/to/llvm/bin/:$PATH
+ninja check-passes
+```
 
 ## Contact
 

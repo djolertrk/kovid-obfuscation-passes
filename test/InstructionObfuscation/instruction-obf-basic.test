@@ -1,0 +1,7 @@
+# REQUIRES: shell
+# RUN: %clang -O2 -fpass-plugin=%inst_obf_plugin -S -emit-llvm %S/Inputs/instruction-obf-basic.c -o %t
+# RUN: %FileCheck %s --input-file=%t
+
+// CHECK: add_numbers
+// CHECK: add {{.*}} !obf
+// CHECK: add {{.*}} !obf

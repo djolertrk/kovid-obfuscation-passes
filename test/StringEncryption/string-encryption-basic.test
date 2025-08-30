@@ -1,0 +1,8 @@
+# REQUIRES: shell
+# RUN: %clang -O2 -S -emit-llvm -o %t.ll %S/Inputs/string-encryption-basic.c
+# RUN: %opt -load-pass-plugin=%string_encryption_plugin -passes=string-encryption -S %t.ll -o %t.enc.ll &> %t2
+# RUN: %FileCheck %s --input-file=%t2
+
+// CHECK: Original string in str: Hello, World!
+// CHECK: Using key: 
+// CHECK: Encrypted string:

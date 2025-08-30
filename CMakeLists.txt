@@ -19,6 +19,12 @@ add_subdirectory(DummyCodeInsertion)
 add_subdirectory(RemoveMetadataAndUnusedCode)
 add_subdirectory(InstructionObfuscation)
 add_subdirectory(StringEncryption)
+add_subdirectory(ControlFlowTaint)
 add_subdirectory(tools)
+
+option(ENABLE_TESTS "Enable Tests" OFF)
+if(ENABLE_TESTS)
+  add_subdirectory(test)
+endif()
 
 install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)
