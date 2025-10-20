@@ -82,6 +82,39 @@ On MacOS, disable GCC plugins as follows:
 $ cmake ../kovid-obfustaion-passes -GNinja -DCMAKE_BUILD_TYPE=Relase -DLLVM_DIR=/opt/homebrew/opt/llvm@19/lib/cmake/llvm -DKOP_BUILD_GCC_PLUGINS=0
 ```
 
+### Windows
+
+On Windows, GCC plugins are automatically disabled. You can build using Visual Studio or command line with CMake:
+
+#### Using Visual Studio
+
+1. Open the folder in Visual Studio (File → Open → Folder)
+2. Visual Studio will automatically detect `CMakeSettings.json`
+3. Select the desired configuration (x64-Release or x64-Debug)
+4. Build → Build All
+
+#### Using Command Line
+
+```powershell
+# Install LLVM 19 for Windows
+# Download from https://github.com/llvm/llvm-project/releases
+
+# Create build directory
+mkdir build
+cd build
+
+# Configure
+cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR="C:\Program Files\LLVM\lib\cmake\llvm"
+
+# Or with Ninja
+cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR="C:\Program Files\LLVM\lib\cmake\llvm"
+
+# Build
+cmake --build . --config Release
+```
+
+The plugins will be built in `build/lib/` directory.
+
 ## Run
 
 Here are some examples.
@@ -136,7 +169,7 @@ clang-19 test.c -O2 -fpass-plugin=/path/to/build/lib/libKoviDRenameCodeLLVMPlugi
 
 NOTE: Make sure you use the same LLVM version as the one used for plugin build.
 
-Or with GCC:
+Or with GCC (Linux only):
 
 ```
 $ g++-12 test.c -O2 -fplugin=/usr/local/lib/libKoviDRenameCodeGCCPlugin.so test.c -c
@@ -161,22 +194,39 @@ test.o:     file format elf64-x86-64
 Disassembly of section .text:
 
 0000000000000000 <_060414>:
-   0:	f3 0f 1e fa          	endbr64 
-   4:	c3                   	ret    
+   0:	f3 0f 1e fa          	endbr64
+   4:	c3                   	ret
    5:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   c:	00 00 00 00 
+   c:	00 00 00 00
 
 0000000000000010 <_020a09>:
-  10:	f3 0f 1e fa          	endbr64 
-  14:	c3                   	ret    
+  10:	f3 0f 1e fa          	endbr64
+  14:	c3                   	ret
   15:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-  1c:	00 00 00 00 
+  1c:	00 00 00 00
 
 0000000000000020 <_09040f0f>:
-  20:	f3 0f 1e fa          	endbr64 
+  20:	f3 0f 1e fa          	endbr64
   24:	b8 01 00 00 00       	mov    $0x1,%eax
   29:	c3                   	ret
 ```
+
+#### Windows Example
+
+On Windows, use the `opt` tool with the plugin. The workflow involves three steps:
+
+```powershell
+# Step 1: Compile to LLVM IR
+clang-19 -O2 -emit-llvm -c test.c -o test.bc
+
+# Step 2: Apply the obfuscation pass using opt
+opt-19 -load-pass-plugin=C:\path\to\build\lib\libKoviDRenameCodeLLVMPlugin.dll -passes="kovid-rename-code" test.bc -o test_obf.bc
+
+# Step 3: Compile the obfuscated IR to object file
+clang-19 -O2 -c test_obf.bc -o test.o
+```
+
+Note: On Windows, LLVM plugins are DLL files and must be used with the `opt` tool, not directly with clang.
 
 ### String Encryption Obfuscation Plugin
 
@@ -216,10 +266,15 @@ But, for example, if you want to debug code that was processed with `libKoviDStr
 
 <img width="611" alt="Screenshot 2025-02-09 at 16 31 35" src="https://github.com/user-attachments/assets/04ddc5e3-838f-4549-b3d2-ca5cf748d98d" />
 
+## Platform Support
+
+- **Linux**: Full support (LLVM and GCC plugins)
+- **macOS**: LLVM plugins only (GCC plugins not supported)
+- **Windows**: LLVM plugins only (GCC plugins not supported)
+
 ## TODO
 
-1. Support Windows
-2. Support more obfusctaion techniques
+1. Support more obfusctaion techniques
 
 
 ## Users

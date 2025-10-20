@@ -38,56 +38,79 @@
 
 using namespace llvm;
 
+static bool runDummyCodeInsertion(Function &F) {
+  // Skip function declarations.
+  if (F.isDeclaration())
+    return false;
+
+  LLVMContext &Ctx = F.getContext();
+  IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
+
+  // Create a dummy local variable of type i32.
+  AllocaInst *dummyAlloca =
+      Builder.CreateAlloca(Type::getInt32Ty(Ctx), nullptr, "dummy");
+
+  // Create a metadata node with a "dummy" tag.
+  MDNode *dummyMD = MDNode::get(Ctx, MDString::get(Ctx, "dummy"));
+
+  // Insert a volatile store of 0.
+  StoreInst *store0 = Builder.CreateStore(
+      ConstantInt::get(Type::getInt32Ty(Ctx), 0), dummyAlloca);
+  store0->setVolatile(true);
+  store0->setMetadata("dummy", dummyMD);
+
+  // Insert a volatile load.
+  LoadInst *dummyLoad =
+      Builder.CreateLoad(Type::getInt32Ty(Ctx), dummyAlloca, "dummy.load");
+  dummyLoad->setVolatile(true);
+  dummyLoad->setMetadata("dummy", dummyMD);
+
+  // Insert dummy arithmetic: add 1 then subtract 1.
+  Value *added = Builder.CreateAdd(
+      dummyLoad, ConstantInt::get(Type::getInt32Ty(Ctx), 1), "dummy.add");
+  Value *subtracted = Builder.CreateSub(
+      added, ConstantInt::get(Type::getInt32Ty(Ctx), 1), "dummy.sub");
+
+  // Insert a volatile store of the result.
+  StoreInst *storeResult = Builder.CreateStore(subtracted, dummyAlloca);
+  storeResult->setVolatile(true);
+  storeResult->setMetadata("dummy", dummyMD);
+
+  // This inserted code is now marked volatile and carries "dummy" metadata,
+  // which should help prevent it from being optimized away.
+
+  return true;
+}
+
 namespace {
 
+#if defined(LLVM_ON_UNIX)
 struct DummyCodeInsertion : public PassInfoMixin<DummyCodeInsertion> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) {
-    // Skip function declarations.
-    if (F.isDeclaration())
+    if (runDummyCodeInsertion(F))
+      return PreservedAnalyses::none();
+    else
       return PreservedAnalyses::all();
-
-    LLVMContext &Ctx = F.getContext();
-    IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
-
-    // Create a dummy local variable of type i32.
-    AllocaInst *dummyAlloca =
-        Builder.CreateAlloca(Type::getInt32Ty(Ctx), nullptr, "dummy");
-
-    // Create a metadata node with a "dummy" tag.
-    MDNode *dummyMD = MDNode::get(Ctx, MDString::get(Ctx, "dummy"));
-
-    // Insert a volatile store of 0.
-    StoreInst *store0 = Builder.CreateStore(
-        ConstantInt::get(Type::getInt32Ty(Ctx), 0), dummyAlloca);
-    store0->setVolatile(true);
-    store0->setMetadata("dummy", dummyMD);
-
-    // Insert a volatile load.
-    LoadInst *dummyLoad =
-        Builder.CreateLoad(Type::getInt32Ty(Ctx), dummyAlloca, "dummy.load");
-    dummyLoad->setVolatile(true);
-    dummyLoad->setMetadata("dummy", dummyMD);
-
-    // Insert dummy arithmetic: add 1 then subtract 1.
-    Value *added = Builder.CreateAdd(
-        dummyLoad, ConstantInt::get(Type::getInt32Ty(Ctx), 1), "dummy.add");
-    Value *subtracted = Builder.CreateSub(
-        added, ConstantInt::get(Type::getInt32Ty(Ctx), 1), "dummy.sub");
-
-    // Insert a volatile store of the result.
-    StoreInst *storeResult = Builder.CreateStore(subtracted, dummyAlloca);
-    storeResult->setVolatile(true);
-    storeResult->setMetadata("dummy", dummyMD);
-
-    // This inserted code is now marked volatile and carries "dummy" metadata,
-    // which should help prevent it from being optimized away.
-
-    return PreservedAnalyses::none();
   }
 };
+#else
+struct DummyCodeInsertion : public FunctionPass {
+  static char ID;
+  DummyCodeInsertion() : FunctionPass(ID) {}
+
+  bool runOnFunction(Function &F) override {
+    return runDummyCodeInsertion(F);
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+  }
+};
+#endif
 
 } // end anonymous namespace
 
+#if defined(LLVM_ON_UNIX)
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
@@ -104,3 +127,8 @@ PassPluginLibraryInfo getPassPluginInfo() {
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return getPassPluginInfo();
 }
+#else
+char DummyCodeInsertion::ID = 0;
+static RegisterPass<DummyCodeInsertion>
+X("kovid-dummy-code-insertion", "KoviD Dummy Code Insertion Pass");
+#endif

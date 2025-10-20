@@ -14,6 +14,23 @@ include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
+# Automatically disable GCC plugins on Windows and macOS
+if(WIN32 OR APPLE)
+  set(KOP_BUILD_GCC_PLUGINS_DEFAULT OFF)
+else()
+  set(KOP_BUILD_GCC_PLUGINS_DEFAULT ON)
+endif()
+
+option(KOP_BUILD_GCC_PLUGINS "Build GCC plugins" ${KOP_BUILD_GCC_PLUGINS_DEFAULT})
+if(WIN32 AND KOP_BUILD_GCC_PLUGINS)
+  message(WARNING "GCC plugins are not supported on Windows. Disabling KOP_BUILD_GCC_PLUGINS.")
+  set(KOP_BUILD_GCC_PLUGINS OFF CACHE BOOL "Build GCC plugins" FORCE)
+endif()
+if(APPLE AND KOP_BUILD_GCC_PLUGINS)
+  message(WARNING "GCC plugins are not recommended on macOS. Disabling KOP_BUILD_GCC_PLUGINS.")
+  set(KOP_BUILD_GCC_PLUGINS OFF CACHE BOOL "Build GCC plugins" FORCE)
+endif()
+
 add_subdirectory(RenameCode)
 add_subdirectory(DummyCodeInsertion)
 add_subdirectory(RemoveMetadataAndUnusedCode)
@@ -27,4 +44,7 @@ if(ENABLE_TESTS)
   add_subdirectory(test)
 endif()
 
-install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)
+# Only install GCC plugin on Unix systems
+if(UNIX AND KOP_BUILD_GCC_PLUGINS)
+  install(FILES ${CMAKE_BINARY_DIR}/lib/libKoviDRenameCodeGCCPlugin.so DESTINATION /usr/local/lib/)
+endif()

@@ -84,6 +84,7 @@ static bool runCodeRename(Function &F, std::string &CryptoKey) {
 
 namespace {
 
+#if defined(LLVM_ON_UNIX)
 struct RenameCode : PassInfoMixin<RenameCode> {
   std::string CryptoKey;
   RenameCode(std::string Key = CRYPTO_KEY) : CryptoKey(Key) {}
@@ -98,9 +99,32 @@ struct RenameCode : PassInfoMixin<RenameCode> {
     return PreservedAnalyses::all();
   }
 };
+#else
+struct RenameCode : public FunctionPass {
+  static char ID;
+  std::string CryptoKey;
+
+  RenameCode(std::string Key = CRYPTO_KEY) : FunctionPass(ID), CryptoKey(Key) {}
+
+  bool runOnFunction(Function &F) override {
+    llvm::WithColor::note() << "Running KoviD Rename Code Pass: " << F.getName() << '\n';
+    llvm::WithColor::note() << "Using crypto key: " << CryptoKey << "\n";
+
+    runCodeRename(F, CryptoKey);
+    llvm::WithColor::note() << '\n';
+
+    return false;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+  }
+};
+#endif
 
 } // end anonymous namespace
 
+#if defined(LLVM_ON_UNIX)
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
@@ -116,3 +140,8 @@ PassPluginLibraryInfo getPassPluginInfo() {
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return getPassPluginInfo();
 }
+#else
+char RenameCode::ID = 0;
+static RegisterPass<RenameCode>
+X("kovid-rename-code", "KoviD Rename Code Pass");
+#endif

@@ -1,18 +1,35 @@
-execute_process(
+if(UNIX)
+  execute_process(
     COMMAND sh -c "od -vAn -N8 -tx8 /dev/urandom | tr -d ' \n'"
     OUTPUT_VARIABLE SE_LLVM_CRYPTO_KEY
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
+else()
+  # Windows: Generate a random hex key using PowerShell
+  execute_process(
+    COMMAND powershell -Command "[System.BitConverter]::ToString([System.Guid]::NewGuid().ToByteArray()).Replace('-','')"
+    OUTPUT_VARIABLE SE_LLVM_CRYPTO_KEY
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+endif()
 
 message(STATUS "Using build-time crypto key for StringEncryption LLVM Plugin: ${SE_LLVM_CRYPTO_KEY}")
 
-add_llvm_pass_plugin(libKoviDStringEncryptionLLVMPlugin
-  StringEncryption.cpp
-    DEPENDS
-    LLVMAnalysis
-    LLVMTransformUtils
-    intrinsics_gen
-  )
+if(UNIX)
+  add_llvm_pass_plugin(libKoviDStringEncryptionLLVMPlugin
+    StringEncryption.cpp
+      DEPENDS
+      LLVMAnalysis
+      LLVMTransformUtils
+      intrinsics_gen
+    )
+else()
+  # Windows/MSVC
+  add_llvm_library(libKoviDStringEncryptionLLVMPlugin MODULE
+    StringEncryption.cpp PLUGIN_TOOL opt)
+
+  add_dependencies(libKoviDStringEncryptionLLVMPlugin LLVMAnalysis LLVMTransformUtils intrinsics_gen)
+endif()
 
 target_compile_definitions(libKoviDStringEncryptionLLVMPlugin PRIVATE SE_LLVM_CRYPTO_KEY="${SE_LLVM_CRYPTO_KEY}")
 
